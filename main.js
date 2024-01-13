@@ -14,7 +14,7 @@ if (process.defaultApp) {
 
 if (process.platform !== 'darwin') {
     console.log("========= WINDOWS / LINUX =========")
-
+    console.log("#####################V2###################")
     // For Windows and Linux
     const gotTheLock = app.requestSingleInstanceLock()
 
@@ -39,6 +39,7 @@ if (process.platform !== 'darwin') {
 
 } else {
     console.log("========= MAC =========")
+    console.log("#####################V2###################")
     // For MAC
     // This method will be called when Electron has finished
     // initialization and is ready to create browser windows.
