@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu } = require('electron')
 const path = require('path');
+const fs = require('fs');
 
 let tray = null;
 let win = null;
@@ -72,6 +73,12 @@ const createWindow = () => {
     })
     // ENABLE THIS TO OPEN DEV TOOLS ON START
     win.webContents.openDevTools()
+
+    // Set window title with version
+    const packageJsonPath = path.join(__dirname, 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    const appVersion = packageJson.version;
+    win.setTitle(`Strolid Dialer v${appVersion}`)
 
     win.loadURL('http://localhost:3005/dialer')
 

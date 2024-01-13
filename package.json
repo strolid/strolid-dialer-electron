@@ -1,6 +1,6 @@
 {
   "name": "dialer-electron-spike",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Spiking out electron for dialer",
   "main": "main.js",
   "scripts": {
@@ -9,6 +9,7 @@
   "author": "strolid",
   "license": "MIT",
   "devDependencies": {
+    "@hydraulic/conveyor": "^13.0.0",
     "electron": "^23.0.0"
   }
 }
