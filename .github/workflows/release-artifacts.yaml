@@ -1,9 +1,9 @@
-name: CI
+name: Release artifacts
 
 on:
-  push:
-    branches:
-      - main
+  create:
+    tags:
+      - '*'
 
 jobs:
   build:
@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run conveyor and export secrets
+      - name: Build and publish artifacts
         run: |
           npx conveyor -f ci.conveyor.conf make site
           npx conveyor -f ci.conveyor.conf make copied-site
