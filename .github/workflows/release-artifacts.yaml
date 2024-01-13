@@ -23,11 +23,9 @@ jobs:
 
       - name: Run conveyor and export secrets
         run: |
-          export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-          export SIGNING_KEY=${{ secrets.SIGNING_KEY }}
           npx conveyor -f ci.conveyor.conf make site
           npx conveyor -f ci.conveyor.conf make copied-site
 
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
