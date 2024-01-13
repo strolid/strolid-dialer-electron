@@ -29,3 +29,4 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      CONVEYOR_AGREE_TO_LICENSE: 1
