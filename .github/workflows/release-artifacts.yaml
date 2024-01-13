@@ -3,7 +3,7 @@ name: Release artifacts
 on:
   create:
     tags:
-      - '*'
+      - 'v*'
 
 jobs:
   build:
