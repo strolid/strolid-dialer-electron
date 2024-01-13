@@ -27,6 +27,6 @@ jobs:
           npx conveyor -f ci.conveyor.conf make copied-site
 
     env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
       SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
       CONVEYOR_AGREE_TO_LICENSE: 1
