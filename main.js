@@ -78,7 +78,8 @@ const createWindow = () => {
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     const appVersion = packageJson.version;
-    win.setTitle(`Strolid Dialer v${appVersion}`)
+    const env = process.env.ELECTRON_ENV || 'prod';
+    win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
     win.loadURL('http://localhost:3005/dialer')
 
@@ -117,7 +118,7 @@ const createWindow = () => {
         showWindow();
     })
     ipcMain.on('destroy-window-delayed', () => {
-        setTimeout(()=>{win.destroy()}, 10000)
+        setTimeout(() => { win.destroy() }, 10000)
     })
 
     // Change tray icon when bria connects
@@ -135,6 +136,11 @@ const createWindow = () => {
             width: 18
         });
         tray.setImage(icon);
+    })
+
+    ipcMain.on('set-user', (event, user) => {
+        console.log(`Setting user to ${user}`);
+        win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension})`)
     })
 }
 
