@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
             callback();
             ipcRenderer.send('destroy-window-delayed');
         }),
-    setUser: (user) => ipcRenderer.send('set-user', user)
+    setUser: (user) => ipcRenderer.send('set-user', user),
+    startCallFromLink: (callback) => ipcRenderer.on('start-call-from-link', (_event, value) => callback(value))
 });

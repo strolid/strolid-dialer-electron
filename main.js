@@ -13,6 +13,16 @@ if (process.defaultApp) {
     app.setAsDefaultProtocolClient('strolid-dialer')
 }
 
+function extractParameters(url) {
+    const dealerIdMatch = /dealerId=([^&]+)/.exec(url);
+    const phoneNumberMatch = /phoneNumber=([^&]+)/.exec(url);
+
+    const dealerId = dealerIdMatch ? dealerIdMatch[1] : null;
+    const phoneNumber = phoneNumberMatch ? phoneNumberMatch[1] : null;
+
+    return { dealerId, phoneNumber };
+}
+
 if (process.platform !== 'darwin') {
     console.log("========= WINDOWS / LINUX =========")
     console.log("#####################V2###################")
@@ -30,6 +40,9 @@ if (process.platform !== 'darwin') {
             }
             // the commandLine is array of strings in which last element is deep link url
             showWindow();
+            const deepLinkUrl = commandLine.find(arg => arg.startsWith('strolid-dialer://'));
+            const {dealerId , phoneNumber} = extractParameters(deepLinkUrl)
+            win.webContents.send('start-call-from-link', {dealerId, phoneNumber})
         })
 
         // Create mainWindow, load the rest of the app, etc...
