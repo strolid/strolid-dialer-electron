@@ -96,6 +96,11 @@ const createWindow = () => {
 
     win.loadURL('http://localhost:3005/dialer')
 
+    win.webContents.setWindowOpenHandler((details) => {
+        shell.openExternal(details.url); // Open URL in user's browser.
+        return { action: "deny" }; // Prevent the app from opening the URL.
+      })
+
     win.on('close', function (e) {
         let response = dialog.showMessageBoxSync(this, {
             type: 'question',
