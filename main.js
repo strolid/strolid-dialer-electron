@@ -41,8 +41,8 @@ if (process.platform !== 'darwin') {
             // the commandLine is array of strings in which last element is deep link url
             showWindow();
             const deepLinkUrl = commandLine.find(arg => arg.startsWith('strolid-dialer://'));
-            const {dealerId , phoneNumber} = extractParameters(deepLinkUrl)
-            win.webContents.send('start-call-from-link', {dealerId, phoneNumber})
+            const { dealerId, phoneNumber } = extractParameters(deepLinkUrl)
+            win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
         })
 
         // Create mainWindow, load the rest of the app, etc...
@@ -64,6 +64,8 @@ if (process.platform !== 'darwin') {
 
     // Handle the protocol. In this case, we choose to show an Error Box.
     app.on('open-url', (event, url) => {
+        const { dealerId, phoneNumber } = extractParameters(url)
+        win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
         showWindow();
     })
 }
@@ -73,7 +75,9 @@ const showWindow = () => {
     if (win.isMinimized()) {
         win.restore();
     }
+    win.setAlwaysOnTop(true);
     win.show();
+    win.setAlwaysOnTop(false);
 }
 
 const createWindow = () => {
@@ -85,7 +89,6 @@ const createWindow = () => {
         }
     })
     // ENABLE THIS TO OPEN DEV TOOLS ON START
-    win.webContents.openDevTools()
 
     // Set window title with version
     const packageJsonPath = path.join(__dirname, 'package.json');
@@ -94,12 +97,16 @@ const createWindow = () => {
     const env = process.env.ELECTRON_ENV || 'prod';
     win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
+    if (env != 'prod') {
+        win.webContents.openDevTools();
+    }
+
     win.loadURL('http://localhost:3005/dialer')
 
     win.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url); // Open URL in user's browser.
         return { action: "deny" }; // Prevent the app from opening the URL.
-      })
+    })
 
     win.on('close', function (e) {
         let response = dialog.showMessageBoxSync(this, {
