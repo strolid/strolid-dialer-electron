@@ -113,18 +113,12 @@ function createWindow() {
             type: 'question',
             buttons: ['Yes', 'No'],
             title: 'Confirm',
-            message: 'Are you sure you want to quit?'
+            icon: './images/exit_image.jpeg',
+            message: 'Please remember to log out of the queue (*45) in Bria before you quit.\n\nAre you sure you want to quit?'
         });
 
         if (response == 1) {
             e.preventDefault()
-        } else {
-            dialog.showMessageBoxSync(win, {
-                type: 'info',
-                buttons: ['Okay'],
-                title: 'Closing Dialer',
-                message: 'Remember to log out of the queue from Bria'
-            });
         }
 
 
