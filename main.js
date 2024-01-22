@@ -70,7 +70,7 @@ if (process.platform !== 'darwin') {
     })
 }
 
-const showWindow = () => {
+function showWindow() {
     if (!win) return;
     if (win.isMinimized()) {
         win.restore();
@@ -80,7 +80,7 @@ const showWindow = () => {
     win.setAlwaysOnTop(false);
 }
 
-const createWindow = () => {
+function createWindow() {
     win = new BrowserWindow({
         width: 1200,
         height: 1000,
@@ -109,14 +109,25 @@ const createWindow = () => {
     })
 
     win.on('close', function (e) {
-        let response = dialog.showMessageBoxSync(this, {
+        let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
             title: 'Confirm',
             message: 'Are you sure you want to quit?'
         });
 
-        if (response == 1) e.preventDefault();
+        if (response == 1) {
+            e.preventDefault()
+        } else {
+            dialog.showMessageBoxSync(win, {
+                type: 'info',
+                buttons: ['Okay'],
+                title: 'Closing Dialer',
+                message: 'Remember to log out of the queue from Bria'
+            });
+        }
+
+
     });
 
     let icon = nativeImage.createFromPath('tray-icon-red.png');
@@ -127,7 +138,7 @@ const createWindow = () => {
     tray = new Tray(icon);
     tray.setToolTip('Strolid Dialer')
     const contextMenu = Menu.buildFromTemplate([
-        { label: 'Logout', type: 'normal', click: () => win.webContents.send('logout') }
+        { label: 'Quit', type: 'normal', click: app.quit }
     ])
     tray.setContextMenu(contextMenu)
     // Bring app to front when tray icon is clicked
