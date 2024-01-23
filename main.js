@@ -112,11 +112,13 @@ function createWindow() {
     })
 
     win.on('close', function (e) {
+        const iconPath = path.join(__dirname, '/images/exit_image.jpeg');
+
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
             title: 'Confirm',
-            icon: './images/exit_image.jpeg',
+            icon: iconPath,
             message: 'Please remember to log out of the queue (*45) in Bria before you quit.\n\nAre you sure you want to quit?'
         });
 
@@ -127,7 +129,8 @@ function createWindow() {
 
     });
 
-    let icon = nativeImage.createFromPath('tray-icon-red.png');
+    const iconPath = path.join(__dirname, '/icons/tray-icon-red.png')
+    let icon = nativeImage.createFromPath(iconPath);
     icon = icon.resize({
         height: 18,
         width: 18
@@ -157,12 +160,14 @@ function createWindow() {
     // Change tray icon when bria connects
     ipcMain.on('bria-status-changed', (event, status) => {
         console.log(`BRIA status changed to ${status}`);
-        let iconPath = "";
+        let iconFile = "";
         if (status === 'connected') {
-            iconPath = 'tray-icon-blue.png';
+            iconFile = 'tray-icon-blue.png';
         } else if (status === 'disconnected') {
-            iconPath = 'tray-icon-red.png';
+            iconFile = 'tray-icon-red.png';
         }
+        const iconPath = path.join(__dirname, '/icons/', iconFile);
+
         let icon = nativeImage.createFromPath(iconPath);
         icon = icon.resize({
             height: 18,
