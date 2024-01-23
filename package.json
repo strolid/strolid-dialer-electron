@@ -1,6 +1,6 @@
 {
   "name": "dialer-electron-spike",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Spiking out electron for dialer",
   "main": "main.js",
   "scripts": {
