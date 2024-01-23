@@ -113,8 +113,9 @@ function createWindow() {
 
     win.on('close', function (e) {
 
-        const iconPath = path.join(__dirname, 'static/common/exit_image.jpeg');
+        // const iconPath = path.join(__dirname, 'static/common/exit_image.jpeg');
 
+        const iconPath = './icons/icon.svg'
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
@@ -130,7 +131,8 @@ function createWindow() {
 
     });
 
-    const iconPath = path.join(__dirname, 'static/common/tray-icon-red.png')
+    // const iconPath = path.join(__dirname, 'static/common/tray-icon-red.png')
+    const iconPath = './icons/icon.svg'
     let icon = nativeImage.createFromPath(iconPath);
     icon = icon.resize({
         height: 18,
