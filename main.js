@@ -166,7 +166,7 @@ function createWindow() {
         } else if (status === 'disconnected') {
             iconFile = 'tray-icon-red.png';
         }
-        const iconPath = path.join(__dirname, '/icons/', iconFile);
+        const iconPath = path.join(__dirname, `/icons/${iconFile}`);
 
         let icon = nativeImage.createFromPath(iconPath);
         icon = icon.resize({
