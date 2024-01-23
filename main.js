@@ -112,7 +112,8 @@ function createWindow() {
     })
 
     win.on('close', function (e) {
-        const iconPath = path.join(__dirname, '/images/exit_image.jpeg');
+
+        const iconPath = path.join(__dirname, 'static/common/exit_image.jpeg');
 
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
@@ -129,7 +130,7 @@ function createWindow() {
 
     });
 
-    const iconPath = path.join(__dirname, '/icons/tray-icon-red.png')
+    const iconPath = path.join(__dirname, 'static/common/tray-icon-red.png')
     let icon = nativeImage.createFromPath(iconPath);
     icon = icon.resize({
         height: 18,
@@ -166,7 +167,7 @@ function createWindow() {
         } else if (status === 'disconnected') {
             iconFile = 'tray-icon-red.png';
         }
-        const iconPath = path.join(__dirname, `/icons/${iconFile}`);
+        const iconPath = path.join(__dirname, `static/common/${iconFile}`);
 
         let icon = nativeImage.createFromPath(iconPath);
         icon = icon.resize({
