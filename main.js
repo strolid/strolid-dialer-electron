@@ -97,11 +97,14 @@ function createWindow() {
     const env = process.env.ELECTRON_ENV || 'prod';
     win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
+
     if (env != 'prod') {
         win.webContents.openDevTools();
+        win.loadURL('http://localhost:3005/dialer')
+    } else {
+        win.loadURL('https://strolid-dialer.strolidcxm.com/dialer')
     }
 
-    win.loadURL('http://localhost:3005/dialer')
 
     win.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url); // Open URL in user's browser.
