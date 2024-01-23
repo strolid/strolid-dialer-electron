@@ -113,9 +113,7 @@ function createWindow() {
 
     win.on('close', function (e) {
 
-        // const iconPath = path.join(__dirname, 'static/common/exit_image.jpeg');
-
-        const iconPath = './icons/icon.svg'
+        const iconPath = 'icons/exit_image.jpeg'
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
@@ -131,8 +129,7 @@ function createWindow() {
 
     });
 
-    // const iconPath = path.join(__dirname, 'static/common/tray-icon-red.png')
-    const iconPath = './icons/icon.svg'
+    const iconPath = 'icons/tray-icon-red.png'
     let icon = nativeImage.createFromPath(iconPath);
     icon = icon.resize({
         height: 18,
@@ -165,13 +162,12 @@ function createWindow() {
         console.log(`BRIA status changed to ${status}`);
         let iconFile = "";
         if (status === 'connected') {
-            iconFile = 'tray-icon-blue.png';
-        } else if (status === 'disconnected') {
-            iconFile = 'tray-icon-red.png';
+            iconFile = 'icons/tray-icon-blue.png';
+        } else {
+            iconFile = 'icons/tray-icon-red.png';
         }
-        const iconPath = path.join(__dirname, `static/common/${iconFile}`);
 
-        let icon = nativeImage.createFromPath(iconPath);
+        let icon = nativeImage.createFromPath(iconFile);
         icon = icon.resize({
             height: 18,
             width: 18
