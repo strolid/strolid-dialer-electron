@@ -113,7 +113,7 @@ function createWindow() {
 
     win.on('close', function (e) {
 
-        const iconPath = 'icons/exit_image.jpeg'
+        const iconPath =  path.join(__dirname, 'icons/exit_image.jpeg');
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
@@ -129,11 +129,11 @@ function createWindow() {
 
     });
 
-    const iconPath = 'icons/tray-icon-red.png'
+    const iconPath =  path.join(__dirname, 'icons/tray-icon-red.png');
     let icon = nativeImage.createFromPath(iconPath);
     icon = icon.resize({
-        height: 18,
-        width: 18
+        height: 16,
+        width: 16
     });
     tray = new Tray(icon);
     tray.setToolTip('Strolid Dialer')
@@ -162,15 +162,15 @@ function createWindow() {
         console.log(`BRIA status changed to ${status}`);
         let iconFile = "";
         if (status === 'connected') {
-            iconFile = 'icons/tray-icon-blue.png';
+            iconFile = path.join(__dirname, 'icons/tray-icon-blue.png');
         } else {
-            iconFile = 'icons/tray-icon-red.png';
+            iconFile = path.join(__dirname, 'icons/tray-icon-red.png');
         }
 
         let icon = nativeImage.createFromPath(iconFile);
         icon = icon.resize({
-            height: 18,
-            width: 18
+            height: 16,
+            width: 16
         });
         tray.setImage(icon);
     })
