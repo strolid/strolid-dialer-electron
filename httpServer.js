@@ -17,7 +17,7 @@ exports.startServer = function () {
       // Check if the request path is /ping
       if (req.url === '/ping') {
         res.writeHead(200, {'Content-Type': 'text/plain'});
-        res.end('PONG FROM STROLID DIALER');
+        res.end('PONG FROM STROLID ELECTRON DIALER');
       } else {
         res.writeHead(404, {'Content-Type': 'text/plain'});
         res.end('Not Found');
