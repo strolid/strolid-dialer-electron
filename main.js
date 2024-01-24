@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu } = require('electron')
 const path = require('path');
 const fs = require('fs');
+const { startServer } = require('./httpServer');
 
 let tray = null;
 let win = null;
@@ -184,3 +185,6 @@ function createWindow() {
 app.whenReady().then(() => {
     createWindow()
 })
+
+
+startServer();
