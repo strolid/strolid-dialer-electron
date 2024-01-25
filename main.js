@@ -2,6 +2,15 @@ const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu } = 
 const path = require('path');
 const fs = require('fs');
 const { startServer } = require('./httpServer');
+const env = process.env.ELECTRON_ENV || 'prod';
+
+// Sentry Integration
+const {init : sentryInit} = require('@sentry/electron');
+sentryInit({
+  dsn: "https://0a8a5d577a01a0e5416ba64f82258edb@o293567.ingest.sentry.io/4506631877689344",
+  environment: env
+});
+
 
 let tray = null;
 let win = null;
@@ -95,7 +104,7 @@ function createWindow() {
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     const appVersion = packageJson.version;
-    const env = process.env.ELECTRON_ENV || 'prod';
+    
     win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
 
@@ -177,7 +186,6 @@ function createWindow() {
     })
 
     ipcMain.on('set-user', (event, user) => {
-        console.log(`Setting user to ${user}`);
         win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension})`)
     })
 }

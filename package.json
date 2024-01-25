@@ -1,7 +1,7 @@
 {
-  "name": "dialer-electron-spike",
+  "name": "strolid-dialer-electron",
   "version": "1.0.13",
-  "description": "Spiking out electron for dialer",
+  "description": "Strolid Dialer Electron",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
@@ -11,5 +11,8 @@
   "devDependencies": {
     "@hydraulic/conveyor": "^13.0.0",
     "electron": "^23.0.0"
+  },
+  "dependencies": {
+    "@sentry/electron": "^4.17.0"
   }
 }
