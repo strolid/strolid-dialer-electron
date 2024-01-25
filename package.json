@@ -1,6 +1,6 @@
 {
   "name": "strolid-dialer-electron",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Strolid Dialer Electron",
   "main": "main.js",
   "scripts": {
