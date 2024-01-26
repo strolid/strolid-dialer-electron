@@ -93,10 +93,13 @@ function showWindow() {
 function createWindow() {
     win = new BrowserWindow({
         width: 1200,
+        minWidth: 932,
         height: 1000,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js')
-        }
+        },
+        autoHideMenuBar: true
+         
     })
     // ENABLE THIS TO OPEN DEV TOOLS ON START
 
