@@ -4,11 +4,14 @@ const fs = require('fs');
 const { startServer } = require('./httpServer');
 const env = process.env.ELECTRON_ENV || 'prod';
 
+Menu.setApplicationMenu(Menu.buildFromTemplate([]))
+app.dock.setMenu(Menu.buildFromTemplate([]));
+
 // Sentry Integration
-const {init : sentryInit} = require('@sentry/electron');
+const { init: sentryInit } = require('@sentry/electron');
 sentryInit({
-  dsn: "https://0a8a5d577a01a0e5416ba64f82258edb@o293567.ingest.sentry.io/4506631877689344",
-  environment: env
+    dsn: "https://0a8a5d577a01a0e5416ba64f82258edb@o293567.ingest.sentry.io/4506631877689344",
+    environment: env
 });
 
 
@@ -99,7 +102,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         },
         autoHideMenuBar: true
-         
+
     })
     // ENABLE THIS TO OPEN DEV TOOLS ON START
 
@@ -107,7 +110,7 @@ function createWindow() {
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     const appVersion = packageJson.version;
-    
+
     win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
 
@@ -126,7 +129,7 @@ function createWindow() {
 
     win.on('close', function (e) {
 
-        const iconPath =  path.join(__dirname, 'icons/exit_image.jpeg');
+        const iconPath = path.join(__dirname, 'icons/exit_image.jpeg');
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
@@ -142,7 +145,7 @@ function createWindow() {
 
     });
 
-    const iconPath =  path.join(__dirname, 'icons/tray-icon-red.png');
+    const iconPath = path.join(__dirname, 'icons/tray-icon-red.png');
     let icon = nativeImage.createFromPath(iconPath);
     icon = icon.resize({
         height: 16,
