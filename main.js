@@ -4,9 +4,6 @@ const fs = require('fs');
 const { startServer } = require('./httpServer');
 const env = process.env.ELECTRON_ENV || 'prod';
 
-Menu.setApplicationMenu(Menu.buildFromTemplate([]))
-app.dock.setMenu(Menu.buildFromTemplate([]));
-
 // Sentry Integration
 const { init: sentryInit } = require('@sentry/electron');
 sentryInit({
