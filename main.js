@@ -5,8 +5,8 @@ const { startServer } = require('./httpServer');
 const env = process.env.ELECTRON_ENV || 'prod';
 
 // Sentry Integration
-const { init: sentryInit } = require('@sentry/electron');
-sentryInit({
+const Sentry = require('@sentry/electron');
+Sentry.init({
     dsn: "https://0a8a5d577a01a0e5416ba64f82258edb@o293567.ingest.sentry.io/4506631877689344",
     environment: env
 });
@@ -190,6 +190,8 @@ function createWindow() {
 
     ipcMain.on('set-user', (event, user) => {
         win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension})`)
+        Sentry.setUser(user);
+        startServer();
     })
 }
 
@@ -198,4 +200,3 @@ app.whenReady().then(() => {
 })
 
 
-startServer();
