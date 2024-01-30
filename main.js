@@ -6,11 +6,12 @@ const env = process.env.ELECTRON_ENV || 'prod';
 
 // Sentry Integration
 const Sentry = require('@sentry/electron');
-Sentry.init({
-    dsn: "https://0a8a5d577a01a0e5416ba64f82258edb@o293567.ingest.sentry.io/4506631877689344",
-    environment: env
-});
-
+if (env === 'prod') {
+    Sentry.init({
+        dsn: "https://0a8a5d577a01a0e5416ba64f82258edb@o293567.ingest.sentry.io/4506631877689344",
+        environment: env
+    });
+}
 
 let tray = null;
 let win = null;
