@@ -16,17 +16,17 @@ exports.startServer = function () {
     } else {
       // Check if the request path is /ping
       if (req.url === '/ping') {
-        res.writeHead(200, {'Content-Type': 'text/plain'});
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('PONG FROM STROLID ELECTRON DIALER');
       } else {
-        res.writeHead(404, {'Content-Type': 'text/plain'});
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');
       }
     }
   });
 
-// Start the server and listen on the specified port
-  server.listen(PORT, () => {
+  // Start the server and listen on the specified port
+  server.listen(PORT, '127.0.0.1', () => {
     console.log(`Server is listening on port ${PORT}`);
   });
 
