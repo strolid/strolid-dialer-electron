@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 3020;
 let server = null;
 
 exports.startServer = function () {
-  if (server && server.listening) {
+  if (server?.listening) {
     console.log('Server is already running');
     return;
   }
