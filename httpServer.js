@@ -2,9 +2,14 @@ const http = require('http');
 
 const PORT = process.env.PORT || 3020;
 
+let server = null;
 
 exports.startServer = function () {
-  const server = http.createServer((req, res) => {
+  if (server && server.listening) {
+    console.log('Server is already running');
+    return;
+  }
+  server = http.createServer((req, res) => {
     // Allow requests from any origin
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
