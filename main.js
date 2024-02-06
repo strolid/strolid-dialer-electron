@@ -29,7 +29,7 @@ function extractParameters(url) {
     const phoneNumberMatch = /phoneNumber=([^&]+)/.exec(url);
 
     const dealerId = dealerIdMatch ? dealerIdMatch[1] : null;
-    const phoneNumber = phoneNumberMatch ? phoneNumberMatch[1] : null;
+    const phoneNumber = phoneNumberMatch ? decodeURIComponent(phoneNumberMatch[1]) : null;
 
     return { dealerId, phoneNumber };
 }
