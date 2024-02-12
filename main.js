@@ -152,7 +152,8 @@ function createWindow() {
     tray = new Tray(icon);
     tray.setToolTip('Strolid Dialer')
     const contextMenu = Menu.buildFromTemplate([
-        { label: 'Quit', type: 'normal', click: app.quit }
+        { label: 'Quit', type: 'normal', click: app.quit },
+        { label: 'Log Out', type: 'normal', click: () => win.webContents.send('logout') }
     ])
     tray.setContextMenu(contextMenu)
     // Bring app to front when tray icon is clicked
