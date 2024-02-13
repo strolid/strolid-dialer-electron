@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu } = require('electron')
+const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, MenuItem } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const { startServer } = require('./httpServer');
@@ -111,13 +111,47 @@ function createWindow() {
 
     win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
-
+    let appUrl = 'https://strolid-dialer.strolidcxm.com/dialer'
+    const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
     if (env != 'prod') {
         win.webContents.openDevTools();
-        win.loadURL('http://localhost:3005/dialer')
-    } else {
-        win.loadURL('https://strolid-dialer.strolidcxm.com/dialer')
+        appUrl = 'http://localhost:3005/dialer'
     }
+    win.loadURL(appUrl)
+
+
+    const appMenu = Menu.getApplicationMenu();
+    const viewMenu = appMenu.items.find(item => item.label === 'View');
+
+    const switchToEdge = new MenuItem({
+        label: 'Switch to Edge',
+        accelerator: 'CmdOrCtrl+E',
+        checked: false,
+        type: 'checkbox',
+        click: async () => {
+            const checked = switchToEdge.checked;
+            if (checked) {
+                // load https://google.com
+                console.log(`switching to ${edgeUrl}`)
+                const title = win.getTitle();
+                win.setTitle(`Redirecting to Edge...`)
+                await win.loadURL(edgeUrl);
+                win.setTitle(title + ' (Edge)');
+                console.log(`switched successfully`)
+            } else {
+                console.log(`switching to ${appUrl}`)
+                const title = win.getTitle();
+                win.setTitle(`Redirecting to Production...`)
+                await win.loadURL(appUrl);
+                win.setTitle(title.replace(' (Edge)', ''));
+                console.log(`switched successfully`)
+            }
+        }
+    })
+
+    viewMenu.submenu.append(switchToEdge);
+
+    Menu.setApplicationMenu(appMenu);
 
 
     win.webContents.setWindowOpenHandler((details) => {
