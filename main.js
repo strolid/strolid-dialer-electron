@@ -125,7 +125,7 @@ function createWindow() {
     let switchedToEdge = false;
     const switchToEdge = new MenuItem({
         label: 'Switch to Edge',
-        accelerator: 'CmdOrCtrl+E',
+        // accelerator: 'CmdOrCtrl+E',
         checked: false,
         type: 'checkbox',
         click: async () => {
@@ -227,7 +227,7 @@ function createWindow() {
     })
 
     ipcMain.on('set-user', (event, user) => {
-        win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ?  " (Edge)" : ""}`)
+        win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
         Sentry.setUser(user);
         startServer();
     })
