@@ -122,7 +122,7 @@ function createWindow() {
 
     const appMenu = Menu.getApplicationMenu();
     const viewMenu = appMenu.items.find(item => item.label === 'View');
-
+    let switchedToEdge = false;
     const switchToEdge = new MenuItem({
         label: 'Switch to Edge',
         accelerator: 'CmdOrCtrl+E',
@@ -137,6 +137,7 @@ function createWindow() {
                 win.setTitle(`Redirecting to Edge...`)
                 await win.loadURL(edgeUrl);
                 win.setTitle(title + ' (Edge)');
+                switchedToEdge = true;
                 console.log(`switched successfully`)
             } else {
                 console.log(`switching to ${appUrl}`)
@@ -144,6 +145,7 @@ function createWindow() {
                 win.setTitle(`Redirecting to Production...`)
                 await win.loadURL(appUrl);
                 win.setTitle(title.replace(' (Edge)', ''));
+                switchedToEdge = false;
                 console.log(`switched successfully`)
             }
         }
@@ -225,7 +227,7 @@ function createWindow() {
     })
 
     ipcMain.on('set-user', (event, user) => {
-        win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension})`)
+        win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ?  " (Edge)" : ""}`)
         Sentry.setUser(user);
         startServer();
     })
