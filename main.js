@@ -116,20 +116,20 @@ function createWindow() {
 
     let appUrl = 'https://strolid-dialer.strolidcxm.com/dialer'
     const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
-    if (env != 'prod') {
+    if (env == 'dev') {
         win.webContents.openDevTools();
         appUrl = 'http://localhost:3005/dialer'
     }
     if (store.get('onEdgeVersion')) {
-        appUrl = edgeUrl;
+        win.loadURL(edgeUrl)
+    }else{
+        win.loadURL(appUrl)
     }
-    win.loadURL(appUrl)
-
 
     const appMenu = Menu.getApplicationMenu();
     const viewMenu = appMenu.items.find(item => item.label === 'View');
 
-    let switchedToEdge = store.get('onEdgeVersion') || false;
+    let switchedToEdge = store.get('onEdgeVersion') ? true : false;
     const switchToEdge = new MenuItem({
         label: 'Switch to Edge',
         // accelerator: 'CmdOrCtrl+E',
@@ -145,7 +145,7 @@ function createWindow() {
                 await win.loadURL(edgeUrl);
                 win.setTitle(title + ' (Edge)');
                 switchedToEdge = true;
-                console.log(`switched successfully`)
+                console.log(`switched to Edge successfully`)
                 store.set('onEdgeVersion', true);
             } else {
                 console.log(`switching to ${appUrl}`)
@@ -154,7 +154,7 @@ function createWindow() {
                 await win.loadURL(appUrl);
                 win.setTitle(title.replace(' (Edge)', ''));
                 switchedToEdge = false;
-                console.log(`switched successfully`)
+                console.log(`switched to Prod/dev successfully`)
                 store.set('onEdgeVersion', false);
             }
         }
