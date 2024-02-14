@@ -2,6 +2,9 @@ const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, Men
 const path = require('path');
 const fs = require('fs');
 const { startServer } = require('./httpServer');
+const Store = require('electron-store');
+
+const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
 
 // Sentry Integration
@@ -117,16 +120,20 @@ function createWindow() {
         win.webContents.openDevTools();
         appUrl = 'http://localhost:3005/dialer'
     }
+    if (store.get('onEdgeVersion')) {
+        appUrl = edgeUrl;
+    }
     win.loadURL(appUrl)
 
 
     const appMenu = Menu.getApplicationMenu();
     const viewMenu = appMenu.items.find(item => item.label === 'View');
-    let switchedToEdge = false;
+
+    let switchedToEdge = store.get('onEdgeVersion') || false;
     const switchToEdge = new MenuItem({
         label: 'Switch to Edge',
         // accelerator: 'CmdOrCtrl+E',
-        checked: false,
+        checked: switchedToEdge,
         type: 'checkbox',
         click: async () => {
             const checked = switchToEdge.checked;
@@ -139,6 +146,7 @@ function createWindow() {
                 win.setTitle(title + ' (Edge)');
                 switchedToEdge = true;
                 console.log(`switched successfully`)
+                store.set('onEdgeVersion', true);
             } else {
                 console.log(`switching to ${appUrl}`)
                 const title = win.getTitle();
@@ -147,6 +155,7 @@ function createWindow() {
                 win.setTitle(title.replace(' (Edge)', ''));
                 switchedToEdge = false;
                 console.log(`switched successfully`)
+                store.set('onEdgeVersion', false);
             }
         }
     })
