@@ -118,7 +118,8 @@ function createWindow() {
     const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
     if (env == 'dev') {
         win.webContents.openDevTools();
-        appUrl = 'http://localhost:3005/dialer'
+        // appUrl = 'http://localhost:3005/dialer'
+        appUrl = 'http://pairing.strolidcxm.com:3005/dialer'
     }
     if (store.get('onEdgeVersion')) {
         win.loadURL(edgeUrl)
