@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { startServer } = require('./httpServer');
 const Store = require('electron-store');
+const contextMenu = require('electron-context-menu');
 
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
@@ -18,6 +19,13 @@ if (env === 'prod') {
 
 let tray = null;
 let win = null;
+
+contextMenu({
+    showLearnSpelling: false,
+    showLookUpSelection: false,
+    showServices: false,
+    showInspectElement: false,
+});
 
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
@@ -118,8 +126,7 @@ function createWindow() {
     const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
     if (env == 'dev') {
         win.webContents.openDevTools();
-        // appUrl = 'http://localhost:3005/dialer'
-        appUrl = 'http://pairing.strolidcxm.com:3005/dialer'
+        appUrl = 'http://localhost:3005/dialer'
     }
     if (store.get('onEdgeVersion')) {
         win.loadURL(edgeUrl)
