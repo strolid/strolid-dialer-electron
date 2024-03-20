@@ -105,6 +105,7 @@ function createWindow() {
         autoHideMenuBar: true
 
     })
+    win.webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
     // ENABLE THIS TO OPEN DEV TOOLS ON START
 
     // Set window title with version
@@ -116,7 +117,7 @@ function createWindow() {
 
     let appUrl = 'https://strolid-dialer.strolidcxm.com/dialer'
     const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
-    if (env == 'dev') {
+    if (env === 'dev') {
         win.webContents.openDevTools();
         // appUrl = 'http://localhost:3005/dialer'
         appUrl = 'http://pairing.strolidcxm.com:3005/dialer'
@@ -130,7 +131,7 @@ function createWindow() {
     const appMenu = Menu.getApplicationMenu();
     const viewMenu = appMenu.items.find(item => item.label === 'View');
 
-    let switchedToEdge = store.get('onEdgeVersion') ? true : false;
+    let switchedToEdge = !!store.get('onEdgeVersion');
     const switchToEdge = new MenuItem({
         label: 'Switch to Edge',
         // accelerator: 'CmdOrCtrl+E',
@@ -237,7 +238,7 @@ function createWindow() {
     })
 
     ipcMain.on('set-user', (event, user) => {
-        win.setTitle(`${env != 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
+        win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
         Sentry.setUser(user);
         startServer();
     })
