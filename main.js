@@ -42,12 +42,14 @@ function extractParameters(url) {
     const dealerId = dealerIdMatch ? dealerIdMatch[1] : null;
     const phoneNumber = phoneNumberMatch ? decodeURIComponent(phoneNumberMatch[1]) : null;
 
+    console.log("dealerId from deep link:", dealerId);
+    console.log("phoneNumber from deep link:", phoneNumber);
+
     return { dealerId, phoneNumber };
 }
 
 if (process.platform !== 'darwin') {
     console.log("========= WINDOWS / LINUX =========")
-    console.log("#####################V2###################")
     // For Windows and Linux
     const gotTheLock = app.requestSingleInstanceLock()
 
@@ -63,32 +65,26 @@ if (process.platform !== 'darwin') {
             // the commandLine is array of strings in which last element is deep link url
             showWindow();
             const deepLinkUrl = commandLine.find(arg => arg.startsWith('strolid-dialer://'));
+            console.log("deep link url (windows):", deepLinkUrl);
             const { dealerId, phoneNumber } = extractParameters(deepLinkUrl)
+            if (!dealerId || !phoneNumber) {
+                console.error("No dealerId or phoneNumber found in deep link")
+            }
             win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
         })
-
-        // Create mainWindow, load the rest of the app, etc...
-        // app.whenReady().then(() => {
-        //     createWindow()
-        // })
     }
 
 } else {
     console.log("========= MAC =========")
-    console.log("#####################V2###################")
-    // For MAC
-    // This method will be called when Electron has finished
-    // initialization and is ready to create browser windows.
-    // Some APIs can only be used after this event occurs.
-    // app.whenReady().then(() => {
-    //     createWindow()
-    // })
 
-    // Handle the protocol. In this case, we choose to show an Error Box.
     app.on('open-url', (event, url) => {
-        const { dealerId, phoneNumber } = extractParameters(url)
-        win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
         showWindow();
+        console.log("deep link url (mac):", url);
+        const { dealerId, phoneNumber } = extractParameters(url)
+        if (!dealerId || !phoneNumber) {
+            console.error("No dealerId or phoneNumber found in deep link")
+        }
+        win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
     })
 }
 
@@ -125,8 +121,7 @@ function createWindow() {
 
     let appUrl = 'https://strolid-dialer.strolidcxm.com/dialer'
     const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
-    if (env === 'dev') {
-        win.webContents.openDevTools();
+    if (env == 'dev') {
         appUrl = 'http://localhost:3005/dialer'
     }
     if (store.get('onEdgeVersion')) {
