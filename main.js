@@ -8,6 +8,30 @@ const contextMenu = require('electron-context-menu');
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
 
+const recordingsDirectory = path.join(__dirname, env === 'prod' ? 'Recordings' : 'Recordings - dev') + path.sep;
+
+function handleRecordingUpload(filename) {
+
+    // TODO: change this to use fetch to upload the file to S3
+    s3.upload(params, (err, data) => {
+        if (err) {
+            console.log('Error uploading file:', err);
+        } else {
+            console.log('File uploaded successfully. File location:', data.Location);
+            // Delete the file after uploading
+            fs.unlink(`${recordingsDirectory}${filename}.wav`, (err) => {
+                if (err) {
+                    console.error('Error deleting file:', err);
+                } else {
+                    console.log('File deleted successfully');
+                }
+            });
+            win.webContents.send('recording-uploaded', filename);
+        }
+    });
+
+}
+
 // Sentry Integration
 const Sentry = require('@sentry/electron');
 if (env === 'prod') {
@@ -104,7 +128,8 @@ function createWindow() {
         minWidth: 932,
         height: 1000,
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, 'preload.js'),
+            sandbox: false
         },
         autoHideMenuBar: true
 
@@ -243,6 +268,10 @@ function createWindow() {
         win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
         Sentry.setUser(user);
         startServer();
+    })
+
+    ipcMain.on('trigger-upload', (event, filename) => {
+        handleRecordingUpload(filename);
     })
 }
 
