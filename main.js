@@ -8,7 +8,8 @@ const contextMenu = require('electron-context-menu');
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
 
-const recordingsDirectory = path.join(__dirname, env === 'prod' ? 'Recordings' : 'Recordings - dev') + path.sep;
+const recordingDirName = env === 'prod' ? 'Recordings' : 'Recordings - dev';
+const recordingsDirectory = path.join(app.getPath('userData'), recordingDirName) + path.sep;
 
 function handleRecordingUpload(filename) {
 
@@ -273,6 +274,8 @@ function createWindow() {
     ipcMain.on('trigger-upload', (event, filename) => {
         handleRecordingUpload(filename);
     })
+
+    win.webContents.send('startup', {recordingsDirectory});
 }
 
 app.whenReady().then(() => {
