@@ -4,33 +4,32 @@ const fs = require('fs');
 const { startServer } = require('./httpServer');
 const Store = require('electron-store');
 const contextMenu = require('electron-context-menu');
+const axios = require('axios');
 
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
 
-const recordingDirName = env === 'prod' ? 'Recordings' : 'Recordings - dev';
-const recordingsDirectory = path.join(app.getPath('userData'), recordingDirName) + path.sep;
 
-function handleRecordingUpload(filename) {
 
-    // TODO: change this to use fetch to upload the file to S3
-    s3.upload(params, (err, data) => {
-        if (err) {
-            console.log('Error uploading file:', err);
-        } else {
-            console.log('File uploaded successfully. File location:', data.Location);
-            // Delete the file after uploading
-            fs.unlink(`${recordingsDirectory}${filename}.wav`, (err) => {
-                if (err) {
-                    console.error('Error deleting file:', err);
-                } else {
-                    console.log('File deleted successfully');
-                }
-            });
-            win.webContents.send('recording-uploaded', filename);
-        }
-    });
-
+async function handleRecordingUpload(filename, preSignedUrl) {
+    try {
+        const filePath = `${getRecordingDirectory()}${filename}.wav`;
+        const fileBuffer = fs.readFileSync(filePath);
+        await axios.put(preSignedUrl, fileBuffer, {
+            headers: {
+                'Content-Type': 'audio/wav',
+                'Content-Length': fileBuffer.length
+            }
+        });
+        console.log(`Recording uploaded successfully ${filePath}`);
+        // Delete the file after uploading synchronously
+        fs.unlinkSync(filePath);
+        console.log(`Recording deleted successfully ${filePath}`);
+        return true;
+    } catch (error) {
+        console.error('Some error happened while uploading or deleting file:', error);
+    }
+    return false;
 }
 
 // Sentry Integration
@@ -271,15 +270,26 @@ function createWindow() {
         startServer();
     })
 
-    ipcMain.on('trigger-upload', (event, filename) => {
-        handleRecordingUpload(filename);
+    ipcMain.on('upload-recording', (event, filename, preSignedUrl) => {
+        return handleRecordingUpload(filename, preSignedUrl);
     })
+}
 
-    win.webContents.send('startup', {recordingsDirectory});
+function getRecordingDirectory() {
+    const recordingDirName = env === 'prod' ? 'Recordings' : 'Recordings - dev';
+    // return `/Users/pavan/Downloads/`
+    return path.join(app.getPath('userData'), recordingDirName) + path.sep;
+}
+
+function getConfig() {
+    return {
+        recordingsDirectory: getRecordingDirectory(),
+    }
 }
 
 app.whenReady().then(() => {
     createWindow()
+    ipcMain.handle('get-config', getConfig)
 })
 
 
