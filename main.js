@@ -25,11 +25,10 @@ async function handleRecordingUpload(filename, preSignedUrl) {
         // Delete the file after uploading synchronously
         fs.unlinkSync(filePath);
         console.log(`Recording deleted successfully ${filePath}`);
-        return true;
+        win.webContents.send('recording-uploaded', filename);
     } catch (error) {
         console.error('Some error happened while uploading or deleting file:', error);
     }
-    return false;
 }
 
 // Sentry Integration
