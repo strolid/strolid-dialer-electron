@@ -84,16 +84,16 @@ if (process.platform !== 'darwin') {
             if (win) {
                 if (win.isMinimized()) win.restore()
                 win.focus()
+                // the commandLine is array of strings in which last element is deep link url
+                showWindow();
+                const deepLinkUrl = commandLine.find(arg => arg.startsWith('strolid-dialer://'));
+                console.log("deep link url (windows):", deepLinkUrl);
+                const { dealerId, phoneNumber } = extractParameters(deepLinkUrl)
+                if (!dealerId || !phoneNumber) {
+                    console.error("No dealerId or phoneNumber found in deep link")
+                }
+                win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
             }
-            // the commandLine is array of strings in which last element is deep link url
-            showWindow();
-            const deepLinkUrl = commandLine.find(arg => arg.startsWith('strolid-dialer://'));
-            console.log("deep link url (windows):", deepLinkUrl);
-            const { dealerId, phoneNumber } = extractParameters(deepLinkUrl)
-            if (!dealerId || !phoneNumber) {
-                console.error("No dealerId or phoneNumber found in deep link")
-            }
-            win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
         })
     }
 
