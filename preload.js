@@ -13,5 +13,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getConfig: () => ipcRenderer.invoke('get-config'),
     uploadRecording: (fileName, preSignedUrl) => ipcRenderer.send('upload-recording', fileName, preSignedUrl),
 });
-
-
