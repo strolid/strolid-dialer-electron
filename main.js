@@ -14,6 +14,10 @@ const env = process.env.ELECTRON_ENV || 'prod';
 async function handleRecordingUpload(filename, preSignedUrl) {
     try {
         const filePath = `${getRecordingDirectory()}${filename}.wav`;
+        if (!fs.existsSync(filePath)) {
+            console.error(`Recording file not found ${filePath}. Probable already uploaded and deleted from hard drive.`);
+            return true; // File might have already been uploaded and deleted from hard drive.
+        }
         const fileBuffer = fs.readFileSync(filePath);
         await axios.put(preSignedUrl, fileBuffer, {
             headers: {
@@ -26,9 +30,11 @@ async function handleRecordingUpload(filename, preSignedUrl) {
         fs.unlinkSync(filePath);
         console.log(`Recording deleted successfully ${filePath}`);
         win.webContents.send('recording-uploaded', filename);
+        return true;
     } catch (error) {
         console.error('Some error happened while uploading or deleting file:', error);
     }
+    return false;
 }
 
 // Sentry Integration
@@ -269,7 +275,7 @@ function createWindow() {
         startServer();
     })
 
-    ipcMain.on('upload-recording', (event, filename, preSignedUrl) => {
+    ipcMain.handle('upload-recording', (event, filename, preSignedUrl) => {
         return handleRecordingUpload(filename, preSignedUrl);
     })
 }
