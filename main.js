@@ -73,7 +73,7 @@ function extractParameters(url) {
     const phoneNumber = phoneNumberMatch ? decodeURIComponent(phoneNumberMatch[1]) : null;
     const makeCallStr = makeCallMatch ? makeCallMatch[1] : 'false';
 
-    const makeCall = makeCallStr === 'false';
+    const makeCall = makeCallStr === 'true';
 
     console.log("deep link url:", url);
 
