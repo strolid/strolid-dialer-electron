@@ -67,14 +67,17 @@ if (process.defaultApp) {
 function extractParameters(url) {
     const dealerIdMatch = /dealerId=([^&]+)/.exec(url);
     const phoneNumberMatch = /phoneNumber=([^&]+)/.exec(url);
+    const makeCallMatch = /makeCall=([^&]+)/.exec(url);
 
     const dealerId = dealerIdMatch ? dealerIdMatch[1] : null;
     const phoneNumber = phoneNumberMatch ? decodeURIComponent(phoneNumberMatch[1]) : null;
+    const makeCallStr = makeCallMatch ? makeCallMatch[1] : 'false';
 
-    console.log("dealerId from deep link:", dealerId);
-    console.log("phoneNumber from deep link:", phoneNumber);
+    const makeCall = makeCallStr === 'false';
 
-    return { dealerId, phoneNumber };
+    console.log("deep link url:", url);
+
+    return { dealerId, phoneNumber, makeCall };
 }
 
 if (process.platform !== 'darwin') {
@@ -94,11 +97,11 @@ if (process.platform !== 'darwin') {
                 showWindow();
                 const deepLinkUrl = commandLine.find(arg => arg.startsWith('strolid-dialer://'));
                 console.log("deep link url (windows):", deepLinkUrl);
-                const { dealerId, phoneNumber } = extractParameters(deepLinkUrl)
+                const { dealerId, phoneNumber, makeCall } = extractParameters(deepLinkUrl)
                 if (!dealerId || !phoneNumber) {
                     console.error("No dealerId or phoneNumber found in deep link")
                 }
-                win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
+                win.webContents.send('start-call-from-link', { dealerId, phoneNumber, makeCall })
             }
         })
     }
@@ -109,11 +112,11 @@ if (process.platform !== 'darwin') {
     app.on('open-url', (event, url) => {
         showWindow();
         console.log("deep link url (mac):", url);
-        const { dealerId, phoneNumber } = extractParameters(url)
+        const { dealerId, phoneNumber, makeCall } = extractParameters(url)
         if (!dealerId || !phoneNumber) {
             console.error("No dealerId or phoneNumber found in deep link")
         }
-        win.webContents.send('start-call-from-link', { dealerId, phoneNumber })
+        win.webContents.send('start-call-from-link', { dealerId, phoneNumber, makeCall })
     })
 }
 
