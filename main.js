@@ -12,8 +12,10 @@ const env = process.env.ELECTRON_ENV || 'prod';
 
 
 async function handleRecordingUpload(filename, preSignedUrl) {
+    let localFileSize = 0;
     try {
         const filePath = `${getRecordingDirectory()}${filename}.wav`;
+        localFileSize = fs.statSync(filePath).size;
         if (!fs.existsSync(filePath)) {
             console.error(`Recording file not found ${filePath}. Probable already uploaded and deleted from hard drive.`);
             return true; // File might have already been uploaded and deleted from hard drive.
@@ -30,11 +32,11 @@ async function handleRecordingUpload(filename, preSignedUrl) {
         fs.unlinkSync(filePath);
         console.log(`Recording deleted successfully ${filePath}`);
         win.webContents.send('recording-uploaded', filename);
-        return true;
+        return {"success": true, localFileSize};
     } catch (error) {
         console.error('Some error happened while uploading or deleting file:', error);
     }
-    return false;
+    return {"success": false, localFileSize};
 }
 
 // Sentry Integration
