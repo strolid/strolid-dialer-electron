@@ -5,6 +5,7 @@ const { startServer } = require('./httpServer');
 const Store = require('electron-store');
 const contextMenu = require('electron-context-menu');
 const axios = require('axios');
+const wavFileInfo = require('wav-file-info');
 
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
@@ -12,14 +13,23 @@ const env = process.env.ELECTRON_ENV || 'prod';
 
 
 async function handleRecordingUpload(filename, preSignedUrl) {
-    let localFileSize = 0;
+    let localFileDuration = 0;
     try {
         const filePath = `${getRecordingDirectory()}${filename}.wav`;
-        localFileSize = fs.statSync(filePath).size;
         if (!fs.existsSync(filePath)) {
             console.error(`Recording file not found ${filePath}. Probable already uploaded and deleted from hard drive.`);
             return true; // File might have already been uploaded and deleted from hard drive.
         }
+
+        // Get WAV file info
+        const wavInfo = await new Promise((resolve, reject) => {
+            wavFileInfo.infoByFilename(filePath, (err, info) => {
+                if (err) reject(err);
+                else resolve(info);
+            });
+        });
+        localFileDuration = wavInfo.duration;
+        
         const fileBuffer = fs.readFileSync(filePath);
         await axios.put(preSignedUrl, fileBuffer, {
             headers: {
@@ -32,11 +42,12 @@ async function handleRecordingUpload(filename, preSignedUrl) {
         fs.unlinkSync(filePath);
         console.log(`Recording deleted successfully ${filePath}`);
         win.webContents.send('recording-uploaded', filename);
-        return {"success": true, localFileSize};
+        
+        return {"success": true, localFileDuration};
     } catch (error) {
         console.error('Some error happened while uploading or deleting file:', error);
     }
-    return {"success": false, localFileSize};
+    return {"success": false, localFileDuration};
 }
 
 // Sentry Integration
