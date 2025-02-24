@@ -29,7 +29,7 @@ async function handleRecordingUpload(filename, preSignedUrl) {
             });
         });
         localFileDuration = wavInfo.duration;
-        
+
         const fileBuffer = fs.readFileSync(filePath);
         await axios.put(preSignedUrl, fileBuffer, {
             headers: {
@@ -42,12 +42,12 @@ async function handleRecordingUpload(filename, preSignedUrl) {
         fs.unlinkSync(filePath);
         console.log(`Recording deleted successfully ${filePath}`);
         win.webContents.send('recording-uploaded', filename);
-        
-        return {"success": true, localFileDuration};
+
+        return { "success": true, localFileDuration };
     } catch (error) {
         console.error('Some error happened while uploading or deleting file:', error);
     }
-    return {"success": false, localFileDuration};
+    return { "success": false, localFileDuration };
 }
 
 // Sentry Integration
@@ -61,6 +61,7 @@ if (env === 'prod') {
 
 let tray = null;
 let win = null;
+let idToken = null;
 
 contextMenu({
     showLearnSpelling: false,
@@ -172,7 +173,7 @@ function createWindow() {
     }
     if (store.get('onEdgeVersion')) {
         win.loadURL(edgeUrl)
-    }else{
+    } else {
         win.loadURL(appUrl)
     }
 
@@ -220,8 +221,10 @@ function createWindow() {
         return { action: "deny" }; // Prevent the app from opening the URL.
     })
 
-    win.on('close', function (e) {
-
+    let isClosing = false;
+    win.on('close', async function (e) {
+        if (isClosing) return;
+        e.preventDefault()
         const iconPath = path.join(__dirname, 'icons/exit_image.jpeg');
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
@@ -232,10 +235,26 @@ function createWindow() {
         });
 
         if (response == 1) {
-            e.preventDefault()
+            return;
         }
-
-
+        isClosing = true;
+        if (idToken) {
+            const logoutOfQueueUrl = appUrl.replace('/dialer', '/api/crexendo/user/my/queues');
+            const response = await fetch(logoutOfQueueUrl, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'logout' }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                }
+            });
+            if (response.ok) {
+                console.log('Logged out of queue successfully');
+            } else {
+                console.error('Failed to log out of queue');
+            }
+        }
+        app.quit()
     });
 
     const iconPath = path.join(__dirname, 'icons/tray-icon-red.png');
@@ -287,7 +306,10 @@ function createWindow() {
 
     ipcMain.on('set-user', (event, user) => {
         win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
+        idToken = user.idToken;
+        delete user.idToken;
         Sentry.setUser(user);
+
         startServer();
     })
 
