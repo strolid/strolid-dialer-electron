@@ -4,3 +4,10 @@ We have automated the build of electron app using GitHub Actions. When we are re
 
 - Automatically update version in package.json and package-lock.json and commits it
 - Automatically tags that commit and pushes the tag, this step will trigger GitHub action to release new artifacts.
+
+## Running App Locally
+### On Windows
+- $env:ELECTRON_ENV = "dev"; npm run start
+
+### On Mac
+- ELECTRON_ENV=dev npm run start
