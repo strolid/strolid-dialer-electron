@@ -239,19 +239,20 @@ function createWindow() {
         }
         isClosing = true;
         if (idToken) {
-            const logoutOfQueueUrl = appUrl.replace('/dialer', '/api/crexendo/user/my/queues');
-            const response = await fetch(logoutOfQueueUrl, {
+            const statusUrl = appUrl.replace('/dialer', '/api/crexendo/user/my/status');
+            const response = await fetch(statusUrl, {
                 method: 'POST',
-                body: JSON.stringify({ action: 'logout' }),
+                body: JSON.stringify({ status: 'unavailable' }),
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${idToken}`
                 }
             });
             if (response.ok) {
-                console.log('Logged out of queue successfully');
+                console.log('Set status to unavailable successfully');
             } else {
-                console.error('Failed to log out of queue');
+                Sentry.captureException(new Error(`Failed to set status to unavailable on close of dialer app: ${response.statusText}`));
+                console.error('Failed to set status to unavailable');
             }
         }
         app.quit()
