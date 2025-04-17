@@ -231,7 +231,7 @@ function createWindow() {
             buttons: ['Yes', 'No'],
             title: 'Confirm',
             icon: iconPath,
-            message: 'Please remember to log out of the queue (*45) in Bria before you quit.\n\nAre you sure you want to quit?'
+            message: 'Are you sure you want to close the dialer?'
         });
 
         if (response == 1) {
