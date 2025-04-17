@@ -10,46 +10,6 @@ const wavFileInfo = require('wav-file-info');
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
 
-
-
-async function handleRecordingUpload(filename, preSignedUrl) {
-    let localFileDuration = 0;
-    try {
-        const filePath = `${getRecordingDirectory()}${filename}.wav`;
-        if (!fs.existsSync(filePath)) {
-            console.error(`Recording file not found ${filePath}. Probable already uploaded and deleted from hard drive.`);
-            return true; // File might have already been uploaded and deleted from hard drive.
-        }
-
-        // Get WAV file info
-        const wavInfo = await new Promise((resolve, reject) => {
-            wavFileInfo.infoByFilename(filePath, (err, info) => {
-                if (err) reject(err);
-                else resolve(info);
-            });
-        });
-        localFileDuration = wavInfo.duration;
-
-        const fileBuffer = fs.readFileSync(filePath);
-        await axios.put(preSignedUrl, fileBuffer, {
-            headers: {
-                'Content-Type': 'audio/wav',
-                'Content-Length': fileBuffer.length
-            }
-        });
-        console.log(`Recording uploaded successfully ${filePath}`);
-        // Delete the file after uploading synchronously
-        fs.unlinkSync(filePath);
-        console.log(`Recording deleted successfully ${filePath}`);
-        win.webContents.send('recording-uploaded', filename);
-
-        return { "success": true, localFileDuration };
-    } catch (error) {
-        console.error('Some error happened while uploading or deleting file:', error);
-    }
-    return { "success": false, localFileDuration };
-}
-
 // Sentry Integration
 const Sentry = require('@sentry/electron');
 if (env === 'prod') {
@@ -313,27 +273,10 @@ function createWindow() {
 
         startServer();
     })
-
-    ipcMain.handle('upload-recording', (event, filename, preSignedUrl) => {
-        return handleRecordingUpload(filename, preSignedUrl);
-    })
-}
-
-function getRecordingDirectory() {
-    const recordingDirName = env === 'prod' ? 'Recordings' : 'Recordings - dev';
-    // return `/Users/pavan/Downloads/`
-    return path.join(app.getPath('userData'), recordingDirName) + path.sep;
-}
-
-function getConfig() {
-    return {
-        recordingsDirectory: getRecordingDirectory(),
-    }
 }
 
 app.whenReady().then(() => {
     createWindow()
-    ipcMain.handle('get-config', getConfig)
 })
 
 
