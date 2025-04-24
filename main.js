@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, MenuItem } = require('electron')
+const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, MenuItem, globalShortcut } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const { startServer } = require('./httpServer');
@@ -276,7 +276,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    createWindow()
-})
+    globalShortcut.register('Control+Shift+H', () => {
+        win.webContents.send('hangup-call-hotkey-pressed')
+    })
+    globalShortcut.register('Control+Shift+A', () => {
+        win.webContents.send('answer-call-hotkey-pressed')
+    })
+    globalShortcut.register('Control+Shift+M', () => {
+        win.webContents.send('mute-call-hotkey-pressed')
+    })
+}).then(createWindow)
 
 
