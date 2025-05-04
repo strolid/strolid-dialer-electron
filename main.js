@@ -218,7 +218,7 @@ function createWindow() {
         app.quit()
     });
 
-    const iconPath = path.join(__dirname, 'icons/tray-icon-red.png');
+    const iconPath = path.join(__dirname, 'icons/tray-icon-unavailable.png');
     let icon = nativeImage.createFromPath(iconPath);
     icon = icon.resize({
         height: 16,
@@ -248,13 +248,18 @@ function createWindow() {
     })
 
     // Change tray icon when bria connects
-    ipcMain.on('bria-status-changed', (event, status) => {
-        console.log(`BRIA status changed to ${status}`);
+    ipcMain.on('status-changed', (event, status) => {
         let iconFile = "";
-        if (status === 'connected') {
-            iconFile = path.join(__dirname, 'icons/tray-icon-blue.png');
-        } else {
-            iconFile = path.join(__dirname, 'icons/tray-icon-red.png');
+        if (status === 'available') {
+            iconFile = path.join(__dirname, 'icons/tray-icon-available.png');
+        } else if (status === 'unavailable') {
+            iconFile = path.join(__dirname, 'icons/tray-icon-unavailable.png');
+        } else if (status === 'break') {
+            iconFile = path.join(__dirname, 'icons/tray-icon-break.png');
+        } else if (status === 'transfers_only') {
+            iconFile = path.join(__dirname, 'icons/tray-icon-transfers_only.png');
+        } else if (status === 'lunch') {
+            iconFile = path.join(__dirname, 'icons/tray-icon-lunch.png');
         }
 
         let icon = nativeImage.createFromPath(iconFile);
