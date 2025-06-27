@@ -14,9 +14,7 @@
   },
   "dependencies": {
     "@sentry/electron": "^4.17.0",
-    "axios": "^1.6.8",
     "electron-context-menu": "^3.6.1",
-    "electron-store": "^8.1.0",
-    "wav-file-info": "^0.0.10"
+    "electron-store": "^8.1.0"
   }
 }

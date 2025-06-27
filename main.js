@@ -4,8 +4,6 @@ const fs = require('fs');
 const { startServer } = require('./httpServer');
 const Store = require('electron-store');
 const contextMenu = require('electron-context-menu');
-const axios = require('axios');
-const wavFileInfo = require('wav-file-info');
 
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
@@ -293,3 +291,20 @@ app.whenReady().then(() => {
 }).then(createWindow)
 
 
+app.on('browser-window-focus', function () {
+    globalShortcut.register("CommandOrControl+R", () => {
+        console.log("CommandOrControl+R is pressed: Shortcut Disabled");
+    });
+    globalShortcut.register("CommandOrControl+Shift+R", () => {
+        console.log("CommandOrControl+Shift+R is pressed: Shortcut Disabled");
+    });
+    globalShortcut.register("F5", () => {
+        console.log("F5 is pressed: Shortcut Disabled");
+    });
+});
+
+app.on('browser-window-blur', function () {
+    globalShortcut.unregister('CommandOrControl+R');
+    globalShortcut.unregister('CommandOrControl+Shift+R');
+    globalShortcut.unregister('F5');
+});
