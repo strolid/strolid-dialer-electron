@@ -20,6 +20,7 @@ if (env === 'prod') {
 let tray = null;
 let win = null;
 let idToken = null;
+let appUrl = "";
 
 contextMenu({
     showLearnSpelling: false,
@@ -92,6 +93,20 @@ if (process.platform !== 'darwin') {
     })
 }
 
+async function logToServer({ message, level = "info", extra = null }) {
+    if (idToken) {
+        const statusUrl = appUrl.replace('/dialer', '/api/logging');
+        await fetch(statusUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({ message, level, extra })
+        });
+    }
+}
+
 function showWindow() {
     if (!win) return;
     if (win.isMinimized()) {
@@ -124,7 +139,7 @@ function createWindow() {
 
     win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
-    let appUrl = 'https://strolid-dialer.strolidcxm.com/dialer'
+    appUrl = 'https://strolid-dialer.strolidcxm.com/dialer'
     const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
     if (env == 'dev') {
         appUrl = 'http://localhost:3005/dialer'
@@ -181,9 +196,13 @@ function createWindow() {
 
     let isClosing = false;
     win.on('close', async function (e) {
+        console.log("event: close", e)
         if (isClosing) return;
         e.preventDefault()
         const iconPath = path.join(__dirname, 'icons/exit_image.jpeg');
+
+        // Send a request to the sveltekit app to log that the user is closing the dialer
+        
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
@@ -191,7 +210,7 @@ function createWindow() {
             icon: iconPath,
             message: 'Are you sure you want to close the dialer?'
         });
-
+        
         if (response == 1) {
             return;
         }
@@ -213,6 +232,7 @@ function createWindow() {
                 console.error('Failed to set status to unavailable');
             }
         }
+        await logToServer({ message: 'User closed the dialer app' });
         app.quit()
     });
 
@@ -275,18 +295,23 @@ function createWindow() {
         Sentry.setUser(user);
 
         startServer();
+
+        logToServer({ message: `User logged into dialer`, extra: { appVersion } });
     })
 }
 
 app.whenReady().then(() => {
     globalShortcut.register('Control+Shift+H', () => {
         win.webContents.send('hangup-call-hotkey-pressed')
+        logToServer({ message: 'Hangup call hotkey pressed'});
     })
     globalShortcut.register('Control+Shift+A', () => {
         win.webContents.send('answer-call-hotkey-pressed')
+        logToServer({ message: 'Answer call hotkey pressed'});
     })
     globalShortcut.register('Control+Shift+M', () => {
         win.webContents.send('mute-call-hotkey-pressed')
+        logToServer({ message: 'Mute call hotkey pressed'});
     })
 }).then(createWindow)
 
