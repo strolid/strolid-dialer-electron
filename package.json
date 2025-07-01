@@ -1,6 +1,6 @@
 {
   "name": "strolid-desktop-dialer",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "description": "Strolid Desktop Dialer",
   "main": "main.js",
   "scripts": {
