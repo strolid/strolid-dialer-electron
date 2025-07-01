@@ -93,7 +93,7 @@ if (process.platform !== 'darwin') {
     })
 }
 
-async function logToServer({ message, level = "info", extra = null }) {
+async function logToServer({ message, level = "info", extra = null, screenshot = undefined }) {
     if (idToken) {
         const statusUrl = appUrl.replace('/dialer', '/api/logging');
         await fetch(statusUrl, {
@@ -102,7 +102,7 @@ async function logToServer({ message, level = "info", extra = null }) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${idToken}`
             },
-            body: JSON.stringify({ message, level, extra })
+            body: JSON.stringify({ message, level, extra, screenshot })
         });
     }
 }
@@ -152,6 +152,53 @@ function createWindow() {
 
     const appMenu = Menu.getApplicationMenu();
     const viewMenu = appMenu.items.find(item => item.label === 'View');
+
+    // Helper function to take screenshot and log with it
+    async function takeScreenshotAndLog(message) {
+        if (win && win.webContents) {
+            try {
+                const screenshot = await win.webContents.capturePage();
+                const screenshotBuffer = screenshot.toPNG();
+                const screenshotBase64 = screenshotBuffer.toString('base64');
+                await logToServer({ 
+                    message: message,
+                    screenshot: screenshotBase64
+                });
+            } catch (error) {
+                console.error('Failed to capture screenshot:', error);
+                await logToServer({ 
+                    message: message,
+                    extra: { screenshotError: error.message }
+                });
+            }
+        }
+    }
+
+    // Intercept the Reload menu item
+    const reloadMenuItem = viewMenu.submenu.items.find(item => item.label === 'Reload');
+    if (reloadMenuItem) {
+        reloadMenuItem.click = async (menuItem, browserWindow, event) => {
+            console.log('Reload menu item clicked - intercepted');
+            await takeScreenshotAndLog('User clicked Reload from View menu');
+            
+            if (win && win.webContents) {
+                win.webContents.reload();
+            }
+        };
+    }
+
+    // Intercept the Force Reload menu item
+    const forceReloadMenuItem = viewMenu.submenu.items.find(item => item.label === 'Force Reload');
+    if (forceReloadMenuItem) {
+        forceReloadMenuItem.click = async (menuItem, browserWindow, event) => {
+            console.log('Force Reload menu item clicked - intercepted');
+            await takeScreenshotAndLog('User clicked Force Reload from View menu');
+            
+            if (win && win.webContents) {
+                win.webContents.reloadIgnoringCache();
+            }
+        };
+    }
 
     let switchedToEdge = !!store.get('onEdgeVersion');
     const switchToEdge = new MenuItem({
