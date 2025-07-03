@@ -19,7 +19,6 @@ if (env === 'prod') {
 
 let tray = null;
 let win = null;
-let idToken = null;
 let appUrl = "";
 
 contextMenu({
@@ -233,7 +232,6 @@ function createWindow() {
 
     let isClosing = false;
     win.on('close', async function (e) {
-        console.log("event: close", e)
         if (isClosing) return;
         e.preventDefault()
         const iconPath = path.join(__dirname, 'icons/exit_image.jpeg');
@@ -252,25 +250,9 @@ function createWindow() {
             return;
         }
         isClosing = true;
-        if (idToken) {
-            const statusUrl = appUrl.replace('/dialer', '/api/crexendo/user/my/status');
-            const response = await fetch(statusUrl, {
-                method: 'POST',
-                body: JSON.stringify({ status: 'unavailable' }),
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                }
-            });
-            if (response.ok) {
-                console.log('Set status to unavailable successfully');
-            } else {
-                Sentry.captureException(new Error(`Failed to set status to unavailable on close of dialer app: ${response.statusText}`));
-                console.error('Failed to set status to unavailable');
-            }
-        }
-        logToServer({ message: 'User closed the dialer app' });
-        app.quit()
+        win.webContents.send('change-status', 'unavailable');
+        // logToServer({ message: 'User closed the dialer app' });
+        // app.quit()
     });
 
     const iconPath = path.join(__dirname, 'icons/tray-icon-unavailable.png');
@@ -302,6 +284,11 @@ function createWindow() {
         setTimeout(() => { win.destroy() }, 10000)
     })
 
+    ipcMain.on('ready-to-close', () => {
+        logToServer({ message: 'User closed the dialer app' });
+        app.quit()
+    })
+
     // Change tray icon when bria connects
     ipcMain.on('status-changed', (event, status) => {
         let iconFile = "";
@@ -327,8 +314,6 @@ function createWindow() {
 
     ipcMain.on('set-user', (event, user) => {
         win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
-        idToken = user.idToken;
-        delete user.idToken;
         Sentry.setUser(user);
 
         startServer();

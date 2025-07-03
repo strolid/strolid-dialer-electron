@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openApp: () => ipcRenderer.send('open-app'),
     statusChanged: (status) => ipcRenderer.send('status-changed', status),
     setUser: (user) => ipcRenderer.send('set-user', user),
+    readyToClose: () => ipcRenderer.send('ready-to-close'),
 
     // From Electron to Svelte
     startCallFromLink: (callback) => ipcRenderer.on('start-call-from-link', (_event, value) => callback(value)),
@@ -13,4 +14,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     hangupCallHotkeyPressed: (callback) => ipcRenderer.on('hangup-call-hotkey-pressed', (_event) => callback()),
     muteCallHotkeyPressed: (callback) => ipcRenderer.on('mute-call-hotkey-pressed', (_event) => callback()),
     logToServer: (callback) => ipcRenderer.on('log-to-server', (_event, value) => callback(value)),
+    changeStatus: (callback) => ipcRenderer.on('change-status', (_event, value) => callback(value)),
 });
