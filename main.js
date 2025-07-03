@@ -93,18 +93,8 @@ if (process.platform !== 'darwin') {
     })
 }
 
-async function logToServer({ message, level = "info", extra = null, screenshot = undefined }) {
-    if (idToken) {
-        const statusUrl = appUrl.replace('/dialer', '/api/logging');
-        await fetch(statusUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify({ message, level, extra, screenshot })
-        });
-    }
+function logToServer({ message, level = "info", extra = null, screenshot = undefined }) {
+    win.webContents.send('log-to-server', { message, level, extra, screenshot })
 }
 
 function showWindow() {
@@ -160,13 +150,13 @@ function createWindow() {
                 const screenshot = await win.webContents.capturePage();
                 const screenshotBuffer = screenshot.toPNG();
                 const screenshotBase64 = screenshotBuffer.toString('base64');
-                await logToServer({ 
+                logToServer({ 
                     message: message,
                     screenshot: screenshotBase64
                 });
             } catch (error) {
                 console.error('Failed to capture screenshot:', error);
-                await logToServer({ 
+                logToServer({ 
                     message: message,
                     extra: { screenshotError: error.message }
                 });
@@ -279,7 +269,7 @@ function createWindow() {
                 console.error('Failed to set status to unavailable');
             }
         }
-        await logToServer({ message: 'User closed the dialer app' });
+        logToServer({ message: 'User closed the dialer app' });
         app.quit()
     });
 

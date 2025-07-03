@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     answerCallHotkeyPressed: (callback) => ipcRenderer.on('answer-call-hotkey-pressed', (_event) => callback()),
     hangupCallHotkeyPressed: (callback) => ipcRenderer.on('hangup-call-hotkey-pressed', (_event) => callback()),
     muteCallHotkeyPressed: (callback) => ipcRenderer.on('mute-call-hotkey-pressed', (_event) => callback()),
+    logToServer: (callback) => ipcRenderer.on('log-to-server', (_event, value) => callback(value)),
 });
