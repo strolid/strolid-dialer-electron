@@ -14,7 +14,9 @@
   },
   "dependencies": {
     "@sentry/electron": "^4.17.0",
+    "check-disk-space": "^3.4.0",
     "electron-context-menu": "^3.6.1",
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "tcp-ping": "^0.1.1"
   }
 }
