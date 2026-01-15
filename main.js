@@ -1,12 +1,21 @@
 const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, MenuItem, globalShortcut } = require('electron')
 const path = require('path');
 const fs = require('fs');
+const dns = require('dns').promises;
+const os = require('os');
+const tcpPing = require('tcp-ping');
 const { startServer } = require('./httpServer');
 const Store = require('electron-store');
 const contextMenu = require('electron-context-menu');
 
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
+
+// Network monitoring configuration
+let networkMonitorInterval = null;
+let speedTestInterval = null;
+const DEFAULT_MONITOR_INTERVAL_MS = 30000; // 30 seconds
+const SPEED_TEST_INTERVAL_MS = 120000; // 2 minutes
 
 // Sentry Integration
 const Sentry = require('@sentry/electron');
@@ -94,6 +103,10 @@ if (process.platform !== 'darwin') {
 
 function logToServer({ message, level = "info", extra = null, screenshot = undefined }) {
     win.webContents.send('log-to-server', { message, level, extra, screenshot })
+}
+
+function sendMetrics(metrics) {
+    win.webContents.send('metrics', metrics)
 }
 
 function showWindow() {
@@ -289,6 +302,335 @@ function createWindow() {
         app.quit()
     })
 
+    // ===== Network Monitoring =====
+    
+    // Check network quality to a specific host using TCP ping
+    ipcMain.handle('check-network-quality', async (event, options = {}) => {
+        const { host = 'strolid-dialer.strolidcxm.com', port = 443, attempts = 5 } = options;
+        
+        return new Promise((resolve) => {
+            tcpPing.ping({ address: host, port, attempts }, (err, data) => {
+                if (err) {
+                    resolve({ 
+                        success: false, 
+                        error: err.message,
+                        host,
+                        port,
+                        timestamp: Date.now() 
+                    });
+                } else {
+                    const results = data.results.filter(r => r.time !== undefined);
+                    const times = results.map(r => r.time);
+                    
+                    // Calculate jitter (standard deviation of latency)
+                    let jitter = 0;
+                    if (times.length > 1) {
+                        const mean = times.reduce((a, b) => a + b, 0) / times.length;
+                        const squaredDiffs = times.map(t => Math.pow(t - mean, 2));
+                        jitter = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / times.length);
+                    }
+                    
+                    resolve({
+                        success: true,
+                        host,
+                        port,
+                        latency: {
+                            avg: data.avg ? Math.round(data.avg * 100) / 100 : null,
+                            min: data.min ? Math.round(data.min * 100) / 100 : null,
+                            max: data.max ? Math.round(data.max * 100) / 100 : null,
+                        },
+                        jitter: Math.round(jitter * 100) / 100,
+                        packetLoss: ((attempts - results.length) / attempts) * 100,
+                        attempts,
+                        successful: results.length,
+                        timestamp: Date.now()
+                    });
+                }
+            });
+        });
+    });
+
+    // Get basic network information
+    ipcMain.handle('get-network-info', async () => {
+        const interfaces = os.networkInterfaces();
+        const activeInterfaces = [];
+        
+        for (const [name, nets] of Object.entries(interfaces)) {
+            for (const net of nets) {
+                // Skip internal/loopback interfaces
+                if (!net.internal && net.family === 'IPv4') {
+                    activeInterfaces.push({
+                        name,
+                        address: net.address,
+                        mac: net.mac,
+                    });
+                }
+            }
+        }
+        
+        // Quick DNS check to verify internet connectivity
+        let dnsReachable = false;
+        let dnsLatency = null;
+        try {
+            const start = Date.now();
+            await dns.lookup('strolid-dialer.strolidcxm.com');
+            dnsLatency = Date.now() - start;
+            dnsReachable = true;
+        } catch (e) {
+            dnsReachable = false;
+        }
+        
+        return {
+            interfaces: activeInterfaces,
+            dnsReachable,
+            dnsLatency,
+            timestamp: Date.now()
+        };
+    });
+
+    // Start periodic network monitoring
+    ipcMain.on('start-network-monitor', (event, options = {}) => {
+        const { intervalMs = DEFAULT_MONITOR_INTERVAL_MS, host, port } = options;
+        
+        // Clear any existing monitor
+        if (networkMonitorInterval) {
+            clearInterval(networkMonitorInterval);
+        }
+        
+        console.log(`Starting network monitor (interval: ${intervalMs}ms)`);
+        
+        // Run immediately, then on interval
+        runNetworkCheck(host, port);
+        networkMonitorInterval = setInterval(() => runNetworkCheck(host, port), intervalMs);
+    });
+
+    // Stop periodic network monitoring
+    ipcMain.on('stop-network-monitor', () => {
+        if (networkMonitorInterval) {
+            clearInterval(networkMonitorInterval);
+            networkMonitorInterval = null;
+            console.log('Network monitor stopped');
+        }
+    });
+
+    // Helper function to detect connection type from interface name
+    function getConnectionType() {
+        const interfaces = os.networkInterfaces();
+        const types = [];
+        
+        for (const [name, nets] of Object.entries(interfaces)) {
+            for (const net of nets) {
+                if (!net.internal && net.family === 'IPv4') {
+                    const nameLower = name.toLowerCase();
+                    // Common interface naming patterns
+                    if (nameLower.includes('wi-fi') || nameLower.includes('wifi') || 
+                        nameLower.includes('wlan') || nameLower.includes('airport') ||
+                        nameLower.startsWith('en0')) {
+                        types.push({ name, type: 'wifi', address: net.address });
+                    } else if (nameLower.includes('ethernet') || nameLower.includes('eth') ||
+                               nameLower.startsWith('en1') || nameLower.startsWith('en2')) {
+                        types.push({ name, type: 'ethernet', address: net.address });
+                    } else if (nameLower.includes('thunderbolt')) {
+                        types.push({ name, type: 'thunderbolt', address: net.address });
+                    } else if (nameLower.includes('usb')) {
+                        types.push({ name, type: 'usb', address: net.address });
+                    } else {
+                        types.push({ name, type: 'unknown', address: net.address });
+                    }
+                }
+            }
+        }
+        
+        // Return primary connection type (prefer ethernet over wifi)
+        const ethernet = types.find(t => t.type === 'ethernet' || t.type === 'thunderbolt');
+        if (ethernet) return { primary: 'ethernet', interfaces: types };
+        
+        const wifi = types.find(t => t.type === 'wifi');
+        if (wifi) return { primary: 'wifi', interfaces: types };
+        
+        return { primary: types[0]?.type || 'unknown', interfaces: types };
+    }
+
+    // Helper function to get system resource usage
+    function getSystemResources() {
+        const cpus = os.cpus();
+        
+        // Calculate CPU usage (average across all cores)
+        let totalIdle = 0;
+        let totalTick = 0;
+        for (const cpu of cpus) {
+            for (const type in cpu.times) {
+                totalTick += cpu.times[type];
+            }
+            totalIdle += cpu.times.idle;
+        }
+        const cpuUsage = Math.round((1 - totalIdle / totalTick) * 100);
+        
+        // Memory usage
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
+        const usedMem = totalMem - freeMem;
+        const memoryUsage = Math.round((usedMem / totalMem) * 100);
+        
+        return {
+            cpu: {
+                usage: cpuUsage,
+                cores: cpus.length
+            },
+            memory: {
+                usage: memoryUsage,
+                total: Math.round(totalMem / (1024 * 1024 * 1024) * 100) / 100, // GB
+                free: Math.round(freeMem / (1024 * 1024 * 1024) * 100) / 100,   // GB
+                used: Math.round(usedMem / (1024 * 1024 * 1024) * 100) / 100    // GB
+            }
+        };
+    }
+
+    // Helper function to run network check and log results
+    async function runNetworkCheck(host = 'strolid-dialer.strolidcxm.com', port = 443) {
+        const connectionType = getConnectionType();
+        const systemResources = getSystemResources();
+        
+        return new Promise((resolve) => {
+            tcpPing.ping({ address: host, port, attempts: 5 }, (err, data) => {
+                if (err) {
+                    const result = {
+                        success: false,
+                        error: err.message,
+                        host,
+                        port,
+                        connectionType: connectionType.primary,
+                        interfaces: connectionType.interfaces,
+                        system: systemResources,
+                        timestamp: Date.now()
+                    };
+                    sendMetrics({ type: 'network_quality', ...result });
+                    win.webContents.send('network-quality-update', result);
+                    resolve(result);
+                } else {
+                    const results = data.results.filter(r => r.time !== undefined);
+                    const times = results.map(r => r.time);
+                    
+                    let jitter = 0;
+                    if (times.length > 1) {
+                        const mean = times.reduce((a, b) => a + b, 0) / times.length;
+                        const squaredDiffs = times.map(t => Math.pow(t - mean, 2));
+                        jitter = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / times.length);
+                    }
+                    
+                    const packetLoss = ((5 - results.length) / 5) * 100;
+                    
+                    const result = {
+                        success: true,
+                        host,
+                        port,
+                        latency: {
+                            avg: data.avg ? Math.round(data.avg * 100) / 100 : null,
+                            min: data.min ? Math.round(data.min * 100) / 100 : null,
+                            max: data.max ? Math.round(data.max * 100) / 100 : null,
+                        },
+                        jitter: Math.round(jitter * 100) / 100,
+                        packetLoss,
+                        connectionType: connectionType.primary,
+                        interfaces: connectionType.interfaces,
+                        system: systemResources,
+                        timestamp: Date.now()
+                    };
+                    
+                    sendMetrics({ type: 'network_quality', ...result });
+                    win.webContents.send('network-quality-update', result);
+                    resolve(result);
+                }
+            });
+        });
+    }
+
+    // Speed test function using HTTP download from public CDN
+    async function runSpeedTest() {
+        const https = require('https');
+        
+        // Use Cloudflare's speed test endpoint
+        const testUrls = [
+            { url: 'https://speed.cloudflare.com/__down?bytes=1000000', size: 1000000 },
+            { url: 'https://speed.cloudflare.com/__down?bytes=5000000', size: 5000000 },
+        ];
+        
+        console.log('Running speed test...');
+        
+        try {
+            const results = [];
+            
+            for (const test of testUrls) {
+                const startTime = Date.now();
+                let downloadedBytes = 0;
+                
+                await new Promise((resolve, reject) => {
+                    const req = https.get(test.url, { timeout: 30000 }, (res) => {
+                        res.on('data', (chunk) => {
+                            downloadedBytes += chunk.length;
+                        });
+                        res.on('end', () => {
+                            const elapsed = Date.now() - startTime;
+                            const speedMbps = (downloadedBytes * 8) / (elapsed / 1000) / 1000000;
+                            results.push({
+                                bytes: downloadedBytes,
+                                elapsed,
+                                speedMbps: Math.round(speedMbps * 100) / 100
+                            });
+                            resolve();
+                        });
+                        res.on('error', reject);
+                    });
+                    req.on('error', reject);
+                    req.on('timeout', () => {
+                        req.destroy();
+                        reject(new Error('Request timeout'));
+                    });
+                });
+            }
+            
+            // Average the results
+            const avgSpeed = results.reduce((sum, r) => sum + r.speedMbps, 0) / results.length;
+            const totalBytes = results.reduce((sum, r) => sum + r.bytes, 0);
+            const totalElapsed = results.reduce((sum, r) => sum + r.elapsed, 0);
+            
+            const speedResult = {
+                success: true,
+                download: {
+                    speedMbps: Math.round(avgSpeed * 100) / 100,
+                    totalBytes,
+                    totalElapsed,
+                    tests: results.length
+                },
+                testServer: 'speed.cloudflare.com',
+                timestamp: Date.now()
+            };
+            
+            sendMetrics({ type: 'speed_test', ...speedResult });
+            win.webContents.send('speed-test-update', speedResult);
+            console.log(`Speed test complete: ${speedResult.download.speedMbps} Mbps download`);
+            
+            return speedResult;
+        } catch (error) {
+            const errorResult = {
+                success: false,
+                error: error.message,
+                timestamp: Date.now()
+            };
+            
+            sendMetrics({ type: 'speed_test', ...errorResult });
+            win.webContents.send('speed-test-update', errorResult);
+            console.error('Speed test failed:', error.message);
+            
+            return errorResult;
+        }
+    }
+
+    // IPC handler for on-demand speed test
+    ipcMain.handle('run-speed-test', async () => {
+        return await runSpeedTest();
+    });
+
     // Change tray icon when bria connects
     ipcMain.on('status-changed', (event, status) => {
         let iconFile = "";
@@ -320,6 +662,82 @@ function createWindow() {
 
         logToServer({ message: `User logged into dialer`, extra: { appVersion } });
     })
+
+    // Log system information at startup
+    async function getSystemInfo() {
+        const checkDiskSpace = require('check-disk-space').default;
+        const platform = os.platform(); // 'darwin', 'win32', 'linux'
+        const platformNames = {
+            darwin: 'macOS',
+            win32: 'Windows',
+            linux: 'Linux'
+        };
+        
+        const cpus = os.cpus();
+        const cpuModel = cpus[0]?.model || 'Unknown';
+        const cpuSpeed = cpus[0]?.speed || 0; // MHz
+        
+        // Get disk space for root drive
+        let disk = { total: null, free: null, used: null };
+        try {
+            const diskPath = platform === 'win32' ? 'C:/' : '/';
+            const diskInfo = await checkDiskSpace(diskPath);
+            disk = {
+                total: Math.round(diskInfo.size / (1024 * 1024 * 1024)),           // GB
+                free: Math.round(diskInfo.free / (1024 * 1024 * 1024)),            // GB
+                used: Math.round((diskInfo.size - diskInfo.free) / (1024 * 1024 * 1024))   // GB
+            };
+        } catch (e) {
+            console.error('Failed to get disk space:', e.message);
+        }
+        
+        return {
+            platform: platformNames[platform] || platform,
+            osVersion: os.release(),
+            osArch: os.arch(),                    // 'x64', 'arm64', etc.
+            cpu: {
+                model: cpuModel.trim(),
+                speed: cpuSpeed,
+                cores: cpus.length
+            },
+            memory: {
+                total: Math.round(os.totalmem() / (1024 * 1024 * 1024) * 100) / 100,  // GB
+            },
+            disk,
+            app: {
+                version: appVersion,
+                env: env
+            },
+            systemUptime: Math.round(os.uptime() / 3600 * 100) / 100,  // hours
+            timestamp: Date.now()
+        };
+    }
+
+    // Wait for page to load before sending system info log
+    // Delay to ensure SvelteKit app has initialized its listeners
+    win.webContents.on('did-finish-load', () => {
+        setTimeout(async () => {
+            const systemInfo = await getSystemInfo();
+            console.log('System info:', JSON.stringify(systemInfo, null, 2));
+            logToServer({
+                message: 'Dialer app started',
+                level: 'info',
+                extra: systemInfo
+            });
+        }, 10000);
+    });
+
+    // Auto-start network monitoring (every 30 seconds)
+    console.log('Starting automatic network monitoring (interval: 30s)');
+    runNetworkCheck();
+    networkMonitorInterval = setInterval(() => runNetworkCheck(), DEFAULT_MONITOR_INTERVAL_MS);
+
+    // Auto-start speed test (every 2 minutes)
+    console.log('Starting automatic speed test (interval: 2m)');
+    setTimeout(() => {
+        runSpeedTest();
+        speedTestInterval = setInterval(() => runSpeedTest(), SPEED_TEST_INTERVAL_MS);
+    }, 10000);
 }
 
 app.whenReady().then(() => {

@@ -15,4 +15,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
     muteCallHotkeyPressed: (callback) => ipcRenderer.on('mute-call-hotkey-pressed', (_event) => callback()),
     logToServer: (callback) => ipcRenderer.on('log-to-server', (_event, value) => callback(value)),
     changeStatus: (callback) => ipcRenderer.on('change-status', (_event, value) => callback(value)),
+
+    // Network Monitoring APIs
+    // On-demand network quality check (returns Promise with results)
+    checkNetworkQuality: (options) => ipcRenderer.invoke('check-network-quality', options),
+    
+    // Get current network interface info (returns Promise)
+    getNetworkInfo: () => ipcRenderer.invoke('get-network-info'),
+    
+    // Start periodic network monitoring (results sent via onNetworkQualityUpdate)
+    startNetworkMonitor: (options) => ipcRenderer.send('start-network-monitor', options),
+    
+    // Stop periodic network monitoring
+    stopNetworkMonitor: () => ipcRenderer.send('stop-network-monitor'),
+    
+    // Callback for periodic network quality updates
+    onNetworkQualityUpdate: (callback) => ipcRenderer.on('network-quality-update', (_event, value) => callback(value)),
+
+    // Speed test (on-demand, returns Promise)
+    runSpeedTest: () => ipcRenderer.invoke('run-speed-test'),
+    
+    // Callback for speed test updates
+    onSpeedTestUpdate: (callback) => ipcRenderer.on('speed-test-update', (_event, value) => callback(value)),
+
+    // Metrics callback - for time-series data to send to DataDog as metrics
+    onMetrics: (callback) => ipcRenderer.on('metrics', (_event, value) => callback(value)),
 });
