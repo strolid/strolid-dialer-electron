@@ -14,8 +14,24 @@ const env = process.env.ELECTRON_ENV || 'prod';
 // Network monitoring configuration
 let networkMonitorInterval = null;
 let speedTestInterval = null;
-const DEFAULT_MONITOR_INTERVAL_MS = 30000; // 30 seconds
-const SPEED_TEST_INTERVAL_MS = 120000; // 2 minutes
+let isSpeedTestRunning = false; // Flag to prevent latency checks during speed test
+const DEFAULT_MONITOR_INTERVAL_MS = 90000; // 90 seconds
+const SPEED_TEST_INTERVAL_MS = 300000; // 5 minutes
+const DISCOVERY_INTERVAL_MS = 3600000; // Re-discover best endpoint every hour
+
+// Crexendo SIP WebSocket endpoints for latency testing
+const CREXENDO_ENDPOINTS = [
+    { host: 'usw.crexendovip.com', port: 9002, region: 'US West', location: 'Phoenix' },
+    { host: 'usw2.crexendovip.com', port: 9002, region: 'US West 2', location: 'Phoenix' },
+    { host: 'usc.crexendovip.com', port: 9002, region: 'US Central', location: 'Chicago' },
+    { host: 'usc2.crexendovip.com', port: 9002, region: 'US Central 2', location: 'Chicago' },
+    { host: 'use.crexendovip.com', port: 9002, region: 'US East', location: 'Washington DC' },
+    { host: 'use2.crexendovip.com', port: 9002, region: 'US East 2', location: 'Washington DC' },
+];
+
+// Best endpoint discovered for this user (cached after initial discovery)
+let bestEndpoint = null;
+let lastDiscoveryTime = null;
 
 // Sentry Integration
 const Sentry = require('@sentry/electron');
@@ -304,10 +320,8 @@ function createWindow() {
 
     // ===== Network Monitoring =====
     
-    // Check network quality to a specific host using TCP ping
-    ipcMain.handle('check-network-quality', async (event, options = {}) => {
-        const { host = 'strolid-dialer.strolidcxm.com', port = 443, attempts = 5 } = options;
-        
+    // Helper function to ping a single endpoint
+    function pingEndpoint(host, port, attempts = 5) {
         return new Promise((resolve) => {
             tcpPing.ping({ address: host, port, attempts }, (err, data) => {
                 if (err) {
@@ -335,9 +349,10 @@ function createWindow() {
                         host,
                         port,
                         latency: {
-                            avg: data.avg ? Math.round(data.avg * 100) / 100 : null,
-                            min: data.min ? Math.round(data.min * 100) / 100 : null,
-                            max: data.max ? Math.round(data.max * 100) / 100 : null,
+                            // Use != null to properly handle 0 values (0 is falsy but valid)
+                            avg: data.avg != null ? Math.round(data.avg * 100) / 100 : null,
+                            min: data.min != null ? Math.round(data.min * 100) / 100 : null,
+                            max: data.max != null ? Math.round(data.max * 100) / 100 : null,
                         },
                         jitter: Math.round(jitter * 100) / 100,
                         packetLoss: ((attempts - results.length) / attempts) * 100,
@@ -348,6 +363,39 @@ function createWindow() {
                 }
             });
         });
+    }
+
+    // Check network quality - runs discovery and returns best endpoint only
+    ipcMain.handle('check-network-quality', async (event, options = {}) => {
+        const { host, port, attempts = 5 } = options;
+        
+        // If specific host provided, test just that one
+        if (host && port) {
+            return pingEndpoint(host, port, attempts);
+        }
+        
+        // Otherwise run discovery and return best endpoint data only
+        const { bestEndpoint: best } = await runEndpointDiscovery();
+        
+        if (best) {
+            return {
+                success: true,
+                host: best.host,
+                port: best.port,
+                region: best.region,
+                location: best.location,
+                latency: best.latency,
+                jitter: best.jitter,
+                packetLoss: best.packetLoss,
+                timestamp: Date.now()
+            };
+        } else {
+            return {
+                success: false,
+                error: 'No reachable endpoints',
+                timestamp: Date.now()
+            };
+        }
     });
 
     // Get basic network information
@@ -389,19 +437,32 @@ function createWindow() {
     });
 
     // Start periodic network monitoring
-    ipcMain.on('start-network-monitor', (event, options = {}) => {
-        const { intervalMs = DEFAULT_MONITOR_INTERVAL_MS, host, port } = options;
+    ipcMain.on('start-network-monitor', async (event, options = {}) => {
+        const { intervalMs = DEFAULT_MONITOR_INTERVAL_MS } = options;
         
         // Clear any existing monitor
         if (networkMonitorInterval) {
             clearInterval(networkMonitorInterval);
         }
         
-        console.log(`Starting network monitor (interval: ${intervalMs}ms)`);
+        // Run initial discovery to find the best endpoint
+        console.log(`[Discovery] Testing ${CREXENDO_ENDPOINTS.length} Crexendo endpoints to find the best one...`);
+        await runEndpointDiscovery();
         
-        // Run immediately, then on interval
-        runNetworkCheck(host, port);
-        networkMonitorInterval = setInterval(() => runNetworkCheck(host, port), intervalMs);
+        if (bestEndpoint) {
+            console.log(`[Monitor] Starting periodic monitoring of ${bestEndpoint.region} (${bestEndpoint.host}) every ${intervalMs}ms`);
+            console.log(`[Monitor] Will re-discover best endpoint every ${DISCOVERY_INTERVAL_MS / 60000} minutes`);
+            
+            // Send best endpoint to renderer for SIP connection
+            win.webContents.send('best-endpoint-discovered', bestEndpoint.host);
+            
+            // Start periodic monitoring of the best endpoint
+            networkMonitorInterval = setInterval(() => runNetworkCheck(), intervalMs);
+        } else {
+            console.log('[Monitor] Warning: No endpoints reachable, will retry discovery on next interval');
+            win.webContents.send('best-endpoint-discovered', null);
+            networkMonitorInterval = setInterval(() => runNetworkCheck(), intervalMs);
+        }
     });
 
     // Stop periodic network monitoring
@@ -411,6 +472,16 @@ function createWindow() {
             networkMonitorInterval = null;
             console.log('Network monitor stopped');
         }
+    });
+
+    // Get the current best endpoint (for renderer to request on demand)
+    ipcMain.handle('get-best-endpoint', async () => {
+        // If no best endpoint yet, run discovery
+        if (!bestEndpoint) {
+            await runEndpointDiscovery();
+        }
+        
+        return bestEndpoint ? bestEndpoint.host : null;
     });
 
     // Helper function to detect connection type from interface name
@@ -486,68 +557,123 @@ function createWindow() {
         };
     }
 
-    // Helper function to run network check and log results
-    async function runNetworkCheck(host = 'strolid-dialer.strolidcxm.com', port = 443) {
+    // Discovery function: tests all endpoints and finds the best one
+    async function runEndpointDiscovery() {
+        console.log('[Discovery] Warming up connections to all endpoints...');
+        
+        // Warmup phase: single ping to each endpoint to prime DNS and connection caches
+        // Run in parallel since we don't care about these measurements
+        await Promise.all(
+            CREXENDO_ENDPOINTS.map(endpoint => pingEndpoint(endpoint.host, endpoint.port, 1))
+        );
+        
+        console.log('[Discovery] Measuring latency to all Crexendo endpoints...');
+        
+        // Test all Crexendo endpoints sequentially for accurate measurements
+        const endpointResults = [];
+        for (const endpoint of CREXENDO_ENDPOINTS) {
+            const result = await pingEndpoint(endpoint.host, endpoint.port, 5);
+            const endpointResult = {
+                ...result,
+                region: endpoint.region,
+                location: endpoint.location
+            };
+            endpointResults.push(endpointResult);
+            
+            // Log each result as we go
+            if (endpointResult.success) {
+                console.log(`[Discovery] ${endpointResult.region} (${endpointResult.host}): ${endpointResult.latency.avg}ms avg, ${endpointResult.jitter}ms jitter, ${endpointResult.packetLoss}% loss`);
+            } else {
+                console.log(`[Discovery] ${endpointResult.region} (${endpointResult.host}): FAILED - ${endpointResult.error}`);
+            }
+        }
+        
+        // Find the best (lowest latency) successful endpoint
+        const successfulResults = endpointResults.filter(r => r.success && r.latency.avg != null);
+        
+        if (successfulResults.length > 0) {
+            bestEndpoint = successfulResults.reduce((best, current) => 
+                current.latency.avg < best.latency.avg ? current : best
+            );
+            lastDiscoveryTime = Date.now();
+            console.log(`[Discovery] Best endpoint: ${bestEndpoint.region} (${bestEndpoint.host}) at ${bestEndpoint.latency.avg}ms`);
+        } else {
+            console.log('[Discovery] Warning: No endpoints were reachable');
+            bestEndpoint = null;
+        }
+        
+        return { endpoints: endpointResults, bestEndpoint };
+    }
+
+    // Helper function to run network check - monitors best endpoint only
+    async function runNetworkCheck() {
+        // Skip latency check if speed test is running to avoid interference
+        if (isSpeedTestRunning) {
+            console.log('[Monitor] Skipping latency check - speed test in progress');
+            return null;
+        }
+        
         const connectionType = getConnectionType();
         const systemResources = getSystemResources();
         
-        return new Promise((resolve) => {
-            tcpPing.ping({ address: host, port, attempts: 5 }, (err, data) => {
-                if (err) {
-                    const result = {
-                        success: false,
-                        error: err.message,
-                        host,
-                        port,
-                        connectionType: connectionType.primary,
-                        interfaces: connectionType.interfaces,
-                        system: systemResources,
-                        timestamp: Date.now()
-                    };
-                    sendMetrics({ type: 'network_quality', ...result });
-                    win.webContents.send('network-quality-update', result);
-                    resolve(result);
-                } else {
-                    const results = data.results.filter(r => r.time !== undefined);
-                    const times = results.map(r => r.time);
-                    
-                    let jitter = 0;
-                    if (times.length > 1) {
-                        const mean = times.reduce((a, b) => a + b, 0) / times.length;
-                        const squaredDiffs = times.map(t => Math.pow(t - mean, 2));
-                        jitter = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / times.length);
-                    }
-                    
-                    const packetLoss = ((5 - results.length) / 5) * 100;
-                    
-                    const result = {
-                        success: true,
-                        host,
-                        port,
-                        latency: {
-                            avg: data.avg ? Math.round(data.avg * 100) / 100 : null,
-                            min: data.min ? Math.round(data.min * 100) / 100 : null,
-                            max: data.max ? Math.round(data.max * 100) / 100 : null,
-                        },
-                        jitter: Math.round(jitter * 100) / 100,
-                        packetLoss,
-                        connectionType: connectionType.primary,
-                        interfaces: connectionType.interfaces,
-                        system: systemResources,
-                        timestamp: Date.now()
-                    };
-                    
-                    sendMetrics({ type: 'network_quality', ...result });
-                    win.webContents.send('network-quality-update', result);
-                    resolve(result);
-                }
-            });
-        });
+        // Check if we need to re-run discovery (every hour or if no best endpoint)
+        const needsDiscovery = !bestEndpoint || 
+            !lastDiscoveryTime || 
+            (Date.now() - lastDiscoveryTime > DISCOVERY_INTERVAL_MS);
+        
+        if (needsDiscovery) {
+            console.log('[Monitor] Re-running endpoint discovery...');
+            await runEndpointDiscovery();
+        }
+        
+        // If still no best endpoint after discovery, report failure
+        if (!bestEndpoint) {
+            const result = {
+                success: false,
+                error: 'No reachable endpoints',
+                connectionType: connectionType.primary,
+                interfaces: connectionType.interfaces,
+                system: systemResources,
+                timestamp: Date.now()
+            };
+            sendMetrics({ type: 'network_quality', ...result });
+            win.webContents.send('network-quality-update', result);
+            return result;
+        }
+        
+        // Monitor only the best endpoint
+        const pingResult = await pingEndpoint(bestEndpoint.host, bestEndpoint.port, 5);
+        
+        console.log(`[Monitor] ${bestEndpoint.region} (${bestEndpoint.host}): ${pingResult.latency?.avg ?? 'FAILED'}ms avg, ${pingResult.jitter ?? '-'}ms jitter, ${pingResult.packetLoss ?? '-'}% loss`);
+        
+        const result = {
+            success: pingResult.success,
+            host: bestEndpoint.host,
+            port: bestEndpoint.port,
+            region: bestEndpoint.region,
+            location: bestEndpoint.location,
+            latency: pingResult.latency,
+            jitter: pingResult.jitter,
+            packetLoss: pingResult.packetLoss,
+            connectionType: connectionType.primary,
+            interfaces: connectionType.interfaces,
+            system: systemResources,
+            timestamp: Date.now()
+        };
+        
+        // Send metrics
+        sendMetrics({ type: 'network_quality', ...result });
+        win.webContents.send('network-quality-update', result);
+        
+        return result;
     }
 
     // Speed test function using HTTP download from public CDN
     async function runSpeedTest() {
         const https = require('https');
+        
+        // Set flag to prevent latency checks during speed test
+        isSpeedTestRunning = true;
         
         // Use Cloudflare's speed test endpoint
         const testUrls = [
@@ -610,6 +736,7 @@ function createWindow() {
             win.webContents.send('speed-test-update', speedResult);
             console.log(`Speed test complete: ${speedResult.download.speedMbps} Mbps download`);
             
+            isSpeedTestRunning = false;
             return speedResult;
         } catch (error) {
             const errorResult = {
@@ -622,6 +749,7 @@ function createWindow() {
             win.webContents.send('speed-test-update', errorResult);
             console.error('Speed test failed:', error.message);
             
+            isSpeedTestRunning = false;
             return errorResult;
         }
     }
