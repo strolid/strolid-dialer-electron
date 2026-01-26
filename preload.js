@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Callback for periodic network quality updates
     onNetworkQualityUpdate: (callback) => ipcRenderer.on('network-quality-update', (_event, value) => callback(value)),
 
+    // Get best Crexendo endpoint for SIP connection (returns Promise)
+    getBestEndpoint: () => ipcRenderer.invoke('get-best-endpoint'),
+    
+    // Callback for when best endpoint is discovered on startup
+    onBestEndpointDiscovered: (callback) => ipcRenderer.on('best-endpoint-discovered', (_event, value) => callback(value)),
+
     // Speed test (on-demand, returns Promise)
     runSpeedTest: () => ipcRenderer.invoke('run-speed-test'),
     
