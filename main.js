@@ -15,9 +15,10 @@ const env = process.env.ELECTRON_ENV || 'prod';
 let networkMonitorInterval = null;
 let speedTestInterval = null;
 let isSpeedTestRunning = false; // Flag to prevent latency checks during speed test
-const DEFAULT_MONITOR_INTERVAL_MS = 90000; // 90 seconds
+const DEFAULT_MONITOR_INTERVAL_MS = 30000; // 30 seconds
 const SPEED_TEST_INTERVAL_MS = 300000; // 5 minutes
 const DISCOVERY_INTERVAL_MS = 3600000; // Re-discover best endpoint every hour
+const MAX_ACCEPTABLE_PACKET_LOSS = 50; // Endpoints with >50% packet loss are considered "down"
 
 // Crexendo SIP WebSocket endpoints for latency testing
 const CREXENDO_ENDPOINTS = [
@@ -335,6 +336,22 @@ function createWindow() {
                 } else {
                     const results = data.results.filter(r => r.time !== undefined);
                     const times = results.map(r => r.time);
+                    const packetLoss = ((attempts - results.length) / attempts) * 100;
+                    
+                    // If all pings failed (100% packet loss), mark as unsuccessful
+                    if (results.length === 0) {
+                        resolve({
+                            success: false,
+                            error: 'All ping attempts timed out',
+                            host,
+                            port,
+                            packetLoss,
+                            attempts,
+                            successful: 0,
+                            timestamp: Date.now()
+                        });
+                        return;
+                    }
                     
                     // Calculate jitter (standard deviation of latency)
                     let jitter = 0;
@@ -355,7 +372,7 @@ function createWindow() {
                             max: data.max != null ? Math.round(data.max * 100) / 100 : null,
                         },
                         jitter: Math.round(jitter * 100) / 100,
-                        packetLoss: ((attempts - results.length) / attempts) * 100,
+                        packetLoss,
                         attempts,
                         successful: results.length,
                         timestamp: Date.now()
@@ -589,16 +606,39 @@ function createWindow() {
         }
         
         // Find the best (lowest latency) successful endpoint
-        const successfulResults = endpointResults.filter(r => r.success && r.latency.avg != null);
+        // Filter out endpoints that are "down":
+        // - success must be true
+        // - latency.avg must be a valid number (not null, undefined, or NaN)
+        // - packet loss must be acceptable (not above threshold)
+        const successfulResults = endpointResults.filter(r => {
+            // Must have success flag
+            if (!r.success) {
+                return false;
+            }
+            
+            // Latency must be a valid finite number
+            if (r.latency?.avg == null || !Number.isFinite(r.latency.avg)) {
+                console.log(`[Discovery] Excluding ${r.region} (${r.host}): invalid latency value`);
+                return false;
+            }
+            
+            // Packet loss must be acceptable
+            if (r.packetLoss > MAX_ACCEPTABLE_PACKET_LOSS) {
+                console.log(`[Discovery] Excluding ${r.region} (${r.host}): high packet loss (${r.packetLoss}%)`);
+                return false;
+            }
+            
+            return true;
+        });
         
         if (successfulResults.length > 0) {
             bestEndpoint = successfulResults.reduce((best, current) => 
                 current.latency.avg < best.latency.avg ? current : best
             );
             lastDiscoveryTime = Date.now();
-            console.log(`[Discovery] Best endpoint: ${bestEndpoint.region} (${bestEndpoint.host}) at ${bestEndpoint.latency.avg}ms`);
+            console.log(`[Discovery] Best endpoint: ${bestEndpoint.region} (${bestEndpoint.host}) at ${bestEndpoint.latency.avg}ms (${bestEndpoint.packetLoss}% packet loss)`);
         } else {
-            console.log('[Discovery] Warning: No endpoints were reachable');
+            console.log('[Discovery] Warning: No endpoints were reachable or all had unacceptable packet loss');
             bestEndpoint = null;
         }
         
@@ -669,64 +709,128 @@ function createWindow() {
     }
 
     // Speed test function using HTTP download from public CDN
+    // Uses parallel connections to match browser-based speed tests (like fast.com)
     async function runSpeedTest() {
         const https = require('https');
         
         // Set flag to prevent latency checks during speed test
         isSpeedTestRunning = true;
         
-        // Use Cloudflare's speed test endpoint
-        const testUrls = [
-            { url: 'https://speed.cloudflare.com/__down?bytes=1000000', size: 1000000 },
-            { url: 'https://speed.cloudflare.com/__down?bytes=5000000', size: 5000000 },
-        ];
+        // Use 4 parallel connections of 5MB each (20MB total) - similar to fast.com approach
+        const PARALLEL_CONNECTIONS = 4;
+        const BYTES_PER_CONNECTION = 5000000; // 5MB each
+        const TOTAL_EXPECTED_BYTES = PARALLEL_CONNECTIONS * BYTES_PER_CONNECTION;
+        const MIN_VALID_BYTES = TOTAL_EXPECTED_BYTES * 0.5; // At least 50% of expected data
         
-        console.log('Running speed test...');
+        console.log(`[SpeedTest] Starting with ${PARALLEL_CONNECTIONS} parallel connections...`);
         
         try {
-            const results = [];
-            
-            for (const test of testUrls) {
-                const startTime = Date.now();
-                let downloadedBytes = 0;
+            const result = await new Promise((resolve, reject) => {
+                let firstChunkTime = null;
+                let lastChunkTime = null;
+                let totalBytes = 0;
+                let completedConnections = 0;
+                let hasError = false;
+                const requests = [];
                 
-                await new Promise((resolve, reject) => {
-                    const req = https.get(test.url, { timeout: 30000 }, (res) => {
+                // Start all connections in parallel
+                for (let i = 0; i < PARALLEL_CONNECTIONS; i++) {
+                    const testUrl = `https://speed.cloudflare.com/__down?bytes=${BYTES_PER_CONNECTION}&_=${Date.now()}_${i}`;
+                    
+                    const req = https.get(testUrl, { timeout: 30000 }, (res) => {
+                        // Check for valid HTTP status
+                        if (res.statusCode !== 200) {
+                            if (!hasError) {
+                                hasError = true;
+                                requests.forEach(r => r.destroy());
+                                reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+                            }
+                            return;
+                        }
+                        
                         res.on('data', (chunk) => {
-                            downloadedBytes += chunk.length;
+                            if (hasError) return;
+                            
+                            const now = Date.now();
+                            totalBytes += chunk.length;
+                            lastChunkTime = now;
+                            
+                            // Start timer on first chunk from any connection
+                            if (firstChunkTime === null) {
+                                firstChunkTime = now;
+                                console.log('[SpeedTest] First chunk received, measuring...');
+                            }
                         });
+                        
                         res.on('end', () => {
-                            const elapsed = Date.now() - startTime;
-                            const speedMbps = (downloadedBytes * 8) / (elapsed / 1000) / 1000000;
-                            results.push({
-                                bytes: downloadedBytes,
-                                elapsed,
-                                speedMbps: Math.round(speedMbps * 100) / 100
-                            });
-                            resolve();
+                            if (hasError) return;
+                            
+                            completedConnections++;
+                            
+                            // When all connections complete, calculate result
+                            if (completedConnections === PARALLEL_CONNECTIONS) {
+                                const elapsed = lastChunkTime - firstChunkTime;
+                                
+                                // Validate we received enough data
+                                if (totalBytes < MIN_VALID_BYTES) {
+                                    reject(new Error(`Incomplete download: only ${totalBytes} bytes received (expected ~${TOTAL_EXPECTED_BYTES})`));
+                                    return;
+                                }
+                                
+                                // Guard against division by zero
+                                if (elapsed <= 0) {
+                                    reject(new Error('Invalid measurement: elapsed time is zero'));
+                                    return;
+                                }
+                                
+                                const speedMbps = (totalBytes * 8) / (elapsed / 1000) / 1000000;
+                                console.log(`[SpeedTest] Downloaded ${(totalBytes / 1000000).toFixed(1)}MB in ${elapsed}ms using ${PARALLEL_CONNECTIONS} connections`);
+                                
+                                resolve({
+                                    bytes: totalBytes,
+                                    elapsed,
+                                    speedMbps: Math.round(speedMbps * 100) / 100,
+                                    connections: PARALLEL_CONNECTIONS
+                                });
+                            }
                         });
-                        res.on('error', reject);
+                        
+                        res.on('error', (err) => {
+                            if (!hasError) {
+                                hasError = true;
+                                requests.forEach(r => r.destroy());
+                                reject(err);
+                            }
+                        });
                     });
-                    req.on('error', reject);
+                    
+                    req.on('error', (err) => {
+                        if (!hasError) {
+                            hasError = true;
+                            requests.forEach(r => r.destroy());
+                            reject(err);
+                        }
+                    });
+                    
                     req.on('timeout', () => {
-                        req.destroy();
-                        reject(new Error('Request timeout'));
+                        if (!hasError) {
+                            hasError = true;
+                            requests.forEach(r => r.destroy());
+                            reject(new Error('Request timeout'));
+                        }
                     });
-                });
-            }
-            
-            // Average the results
-            const avgSpeed = results.reduce((sum, r) => sum + r.speedMbps, 0) / results.length;
-            const totalBytes = results.reduce((sum, r) => sum + r.bytes, 0);
-            const totalElapsed = results.reduce((sum, r) => sum + r.elapsed, 0);
+                    
+                    requests.push(req);
+                }
+            });
             
             const speedResult = {
                 success: true,
                 download: {
-                    speedMbps: Math.round(avgSpeed * 100) / 100,
-                    totalBytes,
-                    totalElapsed,
-                    tests: results.length
+                    speedMbps: result.speedMbps,
+                    totalBytes: result.bytes,
+                    elapsed: result.elapsed,
+                    connections: result.connections
                 },
                 testServer: 'speed.cloudflare.com',
                 timestamp: Date.now()
@@ -734,7 +838,7 @@ function createWindow() {
             
             sendMetrics({ type: 'speed_test', ...speedResult });
             win.webContents.send('speed-test-update', speedResult);
-            console.log(`Speed test complete: ${speedResult.download.speedMbps} Mbps download`);
+            console.log(`Speed test complete: ${speedResult.download.speedMbps} Mbps download (${PARALLEL_CONNECTIONS} connections)`);
             
             isSpeedTestRunning = false;
             return speedResult;
@@ -855,13 +959,8 @@ function createWindow() {
         }, 10000);
     });
 
-    // Auto-start network monitoring (every 30 seconds)
-    console.log('Starting automatic network monitoring (interval: 30s)');
-    runNetworkCheck();
-    networkMonitorInterval = setInterval(() => runNetworkCheck(), DEFAULT_MONITOR_INTERVAL_MS);
-
-    // Auto-start speed test (every 2 minutes)
-    console.log('Starting automatic speed test (interval: 2m)');
+    // Auto-start speed test
+    console.log('Starting automatic speed test (interval: 5m)');
     setTimeout(() => {
         runSpeedTest();
         speedTestInterval = setInterval(() => runSpeedTest(), SPEED_TEST_INTERVAL_MS);
