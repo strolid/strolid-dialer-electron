@@ -956,7 +956,7 @@ function createWindow() {
                 level: 'info',
                 extra: systemInfo
             });
-        }, 10000);
+        }, 30000);
     });
 
     // Auto-start speed test
@@ -964,7 +964,7 @@ function createWindow() {
     setTimeout(() => {
         runSpeedTest();
         speedTestInterval = setInterval(() => runSpeedTest(), SPEED_TEST_INTERVAL_MS);
-    }, 10000);
+    }, 60000);
 }
 
 app.whenReady().then(() => {
