@@ -17,7 +17,6 @@ let speedTestInterval = null;
 let isSpeedTestRunning = false; // Flag to prevent latency checks during speed test
 const DEFAULT_MONITOR_INTERVAL_MS = 30000; // 30 seconds
 const SPEED_TEST_INTERVAL_MS = 300000; // 5 minutes
-const DISCOVERY_INTERVAL_MS = 3600000; // Re-discover best endpoint every hour
 const MAX_ACCEPTABLE_PACKET_LOSS = 50; // Endpoints with >50% packet loss are considered "down"
 
 // Crexendo SIP WebSocket endpoints for latency testing
@@ -30,9 +29,8 @@ const CREXENDO_ENDPOINTS = [
     { host: 'use2.crexendovip.com', port: 9002, region: 'US East 2', location: 'Washington DC' },
 ];
 
-// Best endpoint discovered for this user (cached after initial discovery)
+// Best endpoint discovered at startup (cached for session)
 let bestEndpoint = null;
-let lastDiscoveryTime = null;
 
 // Sentry Integration
 const Sentry = require('@sentry/electron');
@@ -462,13 +460,11 @@ function createWindow() {
             clearInterval(networkMonitorInterval);
         }
         
-        // Run initial discovery to find the best endpoint
-        console.log(`[Discovery] Testing ${CREXENDO_ENDPOINTS.length} Crexendo endpoints to find the best one...`);
+        // Run initial discovery to find first reachable endpoint
         await runEndpointDiscovery();
         
         if (bestEndpoint) {
             console.log(`[Monitor] Starting periodic monitoring of ${bestEndpoint.region} (${bestEndpoint.host}) every ${intervalMs}ms`);
-            console.log(`[Monitor] Will re-discover best endpoint every ${DISCOVERY_INTERVAL_MS / 60000} minutes`);
             
             // Send best endpoint to renderer for SIP connection
             win.webContents.send('best-endpoint-discovered', bestEndpoint.host);
@@ -574,20 +570,13 @@ function createWindow() {
         };
     }
 
-    // Discovery function: tests all endpoints and finds the best one
+    // Discovery function: try first endpoint; if reachable use it (with latency metrics).
+    // Only try the next endpoint if the current one is not reachable (Crexendo prefers all agents on same endpoint).
     async function runEndpointDiscovery() {
-        console.log('[Discovery] Warming up connections to all endpoints...');
+        console.log('[Discovery] Finding first reachable Crexendo endpoint (preferred: same endpoint for all agents)...');
         
-        // Warmup phase: single ping to each endpoint to prime DNS and connection caches
-        // Run in parallel since we don't care about these measurements
-        await Promise.all(
-            CREXENDO_ENDPOINTS.map(endpoint => pingEndpoint(endpoint.host, endpoint.port, 1))
-        );
-        
-        console.log('[Discovery] Measuring latency to all Crexendo endpoints...');
-        
-        // Test all Crexendo endpoints sequentially for accurate measurements
         const endpointResults = [];
+        
         for (const endpoint of CREXENDO_ENDPOINTS) {
             const result = await pingEndpoint(endpoint.host, endpoint.port, 5);
             const endpointResult = {
@@ -597,51 +586,23 @@ function createWindow() {
             };
             endpointResults.push(endpointResult);
             
-            // Log each result as we go
             if (endpointResult.success) {
-                console.log(`[Discovery] ${endpointResult.region} (${endpointResult.host}): ${endpointResult.latency.avg}ms avg, ${endpointResult.jitter}ms jitter, ${endpointResult.packetLoss}% loss`);
+                const validLatency = endpointResult.latency?.avg != null && Number.isFinite(endpointResult.latency.avg);
+                const acceptableLoss = (endpointResult.packetLoss ?? 0) <= MAX_ACCEPTABLE_PACKET_LOSS;
+                
+                if (validLatency && acceptableLoss) {
+                    bestEndpoint = endpointResult;
+                    console.log(`[Discovery] Using endpoint: ${bestEndpoint.region} (${bestEndpoint.host}) at ${bestEndpoint.latency.avg}ms avg, ${bestEndpoint.jitter}ms jitter, ${bestEndpoint.packetLoss}% loss`);
+                    return { endpoints: endpointResults, bestEndpoint };
+                }
+                console.log(`[Discovery] ${endpointResult.region} (${endpointResult.host}): excluded (invalid latency or packet loss > ${MAX_ACCEPTABLE_PACKET_LOSS}%), trying next...`);
             } else {
-                console.log(`[Discovery] ${endpointResult.region} (${endpointResult.host}): FAILED - ${endpointResult.error}`);
+                console.log(`[Discovery] ${endpointResult.region} (${endpointResult.host}): FAILED - ${endpointResult.error}, trying next...`);
             }
         }
         
-        // Find the best (lowest latency) successful endpoint
-        // Filter out endpoints that are "down":
-        // - success must be true
-        // - latency.avg must be a valid number (not null, undefined, or NaN)
-        // - packet loss must be acceptable (not above threshold)
-        const successfulResults = endpointResults.filter(r => {
-            // Must have success flag
-            if (!r.success) {
-                return false;
-            }
-            
-            // Latency must be a valid finite number
-            if (r.latency?.avg == null || !Number.isFinite(r.latency.avg)) {
-                console.log(`[Discovery] Excluding ${r.region} (${r.host}): invalid latency value`);
-                return false;
-            }
-            
-            // Packet loss must be acceptable
-            if (r.packetLoss > MAX_ACCEPTABLE_PACKET_LOSS) {
-                console.log(`[Discovery] Excluding ${r.region} (${r.host}): high packet loss (${r.packetLoss}%)`);
-                return false;
-            }
-            
-            return true;
-        });
-        
-        if (successfulResults.length > 0) {
-            bestEndpoint = successfulResults.reduce((best, current) => 
-                current.latency.avg < best.latency.avg ? current : best
-            );
-            lastDiscoveryTime = Date.now();
-            console.log(`[Discovery] Best endpoint: ${bestEndpoint.region} (${bestEndpoint.host}) at ${bestEndpoint.latency.avg}ms (${bestEndpoint.packetLoss}% packet loss)`);
-        } else {
-            console.log('[Discovery] Warning: No endpoints were reachable or all had unacceptable packet loss');
-            bestEndpoint = null;
-        }
-        
+        console.log('[Discovery] Warning: No endpoints were reachable or all had unacceptable packet loss');
+        bestEndpoint = null;
         return { endpoints: endpointResults, bestEndpoint };
     }
 
@@ -656,17 +617,7 @@ function createWindow() {
         const connectionType = getConnectionType();
         const systemResources = getSystemResources();
         
-        // Check if we need to re-run discovery (every hour or if no best endpoint)
-        const needsDiscovery = !bestEndpoint || 
-            !lastDiscoveryTime || 
-            (Date.now() - lastDiscoveryTime > DISCOVERY_INTERVAL_MS);
-        
-        if (needsDiscovery) {
-            console.log('[Monitor] Re-running endpoint discovery...');
-            await runEndpointDiscovery();
-        }
-        
-        // If still no best endpoint after discovery, report failure
+        // Discovery runs only at startup; if no endpoint was found then, report failure
         if (!bestEndpoint) {
             const result = {
                 success: false,
