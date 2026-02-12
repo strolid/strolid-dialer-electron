@@ -380,112 +380,31 @@ function createWindow() {
         });
     }
 
-    // Check network quality - runs discovery and returns best endpoint only
-    ipcMain.handle('check-network-quality', async (event, options = {}) => {
-        const { host, port, attempts = 5 } = options;
-        
-        // If specific host provided, test just that one
-        if (host && port) {
-            return pingEndpoint(host, port, attempts);
-        }
-        
-        // Otherwise run discovery and return best endpoint data only
-        const { bestEndpoint: best } = await runEndpointDiscovery();
-        
-        if (best) {
-            return {
-                success: true,
-                host: best.host,
-                port: best.port,
-                region: best.region,
-                location: best.location,
-                latency: best.latency,
-                jitter: best.jitter,
-                packetLoss: best.packetLoss,
-                timestamp: Date.now()
-            };
-        } else {
-            return {
-                success: false,
-                error: 'No reachable endpoints',
-                timestamp: Date.now()
-            };
-        }
-    });
 
-    // Get basic network information
-    ipcMain.handle('get-network-info', async () => {
-        const interfaces = os.networkInterfaces();
-        const activeInterfaces = [];
-        
-        for (const [name, nets] of Object.entries(interfaces)) {
-            for (const net of nets) {
-                // Skip internal/loopback interfaces
-                if (!net.internal && net.family === 'IPv4') {
-                    activeInterfaces.push({
-                        name,
-                        address: net.address,
-                        mac: net.mac,
-                    });
-                }
-            }
-        }
-        
-        // Quick DNS check to verify internet connectivity
-        let dnsReachable = false;
-        let dnsLatency = null;
-        try {
-            const start = Date.now();
-            await dns.lookup('strolid-dialer.strolidcxm.com');
-            dnsLatency = Date.now() - start;
-            dnsReachable = true;
-        } catch (e) {
-            dnsReachable = false;
-        }
-        
-        return {
-            interfaces: activeInterfaces,
-            dnsReachable,
-            dnsLatency,
-            timestamp: Date.now()
-        };
-    });
-
-    // Start periodic network monitoring
-    ipcMain.on('start-network-monitor', async (event, options = {}) => {
+    // Start periodic network monitoring (shared by IPC and auto-start)
+    async function startPeriodicMonitor(options = {}) {
         const { intervalMs = DEFAULT_MONITOR_INTERVAL_MS } = options;
-        
-        // Clear any existing monitor
-        if (networkMonitorInterval) {
-            clearInterval(networkMonitorInterval);
-        }
-        
-        // Run initial discovery to find first reachable endpoint
-        await runEndpointDiscovery();
-        
-        if (bestEndpoint) {
-            console.log(`[Monitor] Starting periodic monitoring of ${bestEndpoint.region} (${bestEndpoint.host}) every ${intervalMs}ms`);
-            
-            // Send best endpoint to renderer for SIP connection
-            win.webContents.send('best-endpoint-discovered', bestEndpoint.host);
-            
-            // Start periodic monitoring of the best endpoint
-            networkMonitorInterval = setInterval(() => runNetworkCheck(), intervalMs);
-        } else {
-            console.log('[Monitor] Warning: No endpoints reachable, will retry discovery on next interval');
-            win.webContents.send('best-endpoint-discovered', null);
-            networkMonitorInterval = setInterval(() => runNetworkCheck(), intervalMs);
-        }
-    });
-
-    // Stop periodic network monitoring
-    ipcMain.on('stop-network-monitor', () => {
         if (networkMonitorInterval) {
             clearInterval(networkMonitorInterval);
             networkMonitorInterval = null;
-            console.log('Network monitor stopped');
         }
-    });
+        
+        // Only run discovery if we don't have a best endpoint yet
+        if (!bestEndpoint) {
+            await runEndpointDiscovery();
+        }
+        
+        if (bestEndpoint) {
+            console.log(`[Monitor] Starting periodic monitoring of ${bestEndpoint.region} (${bestEndpoint.host}) every ${intervalMs}ms`);
+            networkMonitorInterval = setInterval(() => runNetworkCheck(), intervalMs);
+            runNetworkCheck();
+        } else {
+            console.log('[Monitor] Warning: No endpoints reachable, will retry discovery on next interval');
+            networkMonitorInterval = setInterval(() => runNetworkCheck(), intervalMs);
+            runNetworkCheck();
+        }
+    }
+
 
     // Get the current best endpoint (for renderer to request on demand)
     ipcMain.handle('get-best-endpoint', async () => {
@@ -593,6 +512,26 @@ function createWindow() {
                 if (validLatency && acceptableLoss) {
                     bestEndpoint = endpointResult;
                     console.log(`[Discovery] Using endpoint: ${bestEndpoint.region} (${bestEndpoint.host}) at ${bestEndpoint.latency.avg}ms avg, ${bestEndpoint.jitter}ms jitter, ${bestEndpoint.packetLoss}% loss`);
+                    
+                    // Send initial metric with discovery results
+                    const connectionType = getConnectionType();
+                    const systemResources = getSystemResources();
+                    sendMetrics({
+                        type: 'network_quality',
+                        success: true,
+                        host: bestEndpoint.host,
+                        port: bestEndpoint.port,
+                        region: bestEndpoint.region,
+                        location: bestEndpoint.location,
+                        latency: bestEndpoint.latency,
+                        jitter: bestEndpoint.jitter,
+                        packetLoss: bestEndpoint.packetLoss,
+                        connectionType: connectionType.primary,
+                        interfaces: connectionType.interfaces,
+                        system: systemResources,
+                        timestamp: Date.now()
+                    });
+                    
                     return { endpoints: endpointResults, bestEndpoint };
                 }
                 console.log(`[Discovery] ${endpointResult.region} (${endpointResult.host}): excluded (invalid latency or packet loss > ${MAX_ACCEPTABLE_PACKET_LOSS}%), trying next...`);
@@ -610,7 +549,7 @@ function createWindow() {
     async function runNetworkCheck() {
         // Skip latency check if speed test is running to avoid interference
         if (isSpeedTestRunning) {
-            console.log('[Monitor] Skipping latency check - speed test in progress');
+            console.log(`[Monitor] ${new Date().toISOString()} Skipping latency check - speed test in progress`);
             return null;
         }
         
@@ -628,14 +567,13 @@ function createWindow() {
                 timestamp: Date.now()
             };
             sendMetrics({ type: 'network_quality', ...result });
-            win.webContents.send('network-quality-update', result);
             return result;
         }
         
         // Monitor only the best endpoint
         const pingResult = await pingEndpoint(bestEndpoint.host, bestEndpoint.port, 5);
         
-        console.log(`[Monitor] ${bestEndpoint.region} (${bestEndpoint.host}): ${pingResult.latency?.avg ?? 'FAILED'}ms avg, ${pingResult.jitter ?? '-'}ms jitter, ${pingResult.packetLoss ?? '-'}% loss`);
+        console.log(`[Monitor] ${new Date().toISOString()} ${bestEndpoint.region} (${bestEndpoint.host}): ${pingResult.latency?.avg ?? 'FAILED'}ms avg, ${pingResult.jitter ?? '-'}ms jitter, ${pingResult.packetLoss ?? '-'}% loss`);
         
         const result = {
             success: pingResult.success,
@@ -654,7 +592,6 @@ function createWindow() {
         
         // Send metrics
         sendMetrics({ type: 'network_quality', ...result });
-        win.webContents.send('network-quality-update', result);
         
         return result;
     }
@@ -788,7 +725,6 @@ function createWindow() {
             };
             
             sendMetrics({ type: 'speed_test', ...speedResult });
-            win.webContents.send('speed-test-update', speedResult);
             console.log(`Speed test complete: ${speedResult.download.speedMbps} Mbps download (${PARALLEL_CONNECTIONS} connections)`);
             
             isSpeedTestRunning = false;
@@ -801,18 +737,12 @@ function createWindow() {
             };
             
             sendMetrics({ type: 'speed_test', ...errorResult });
-            win.webContents.send('speed-test-update', errorResult);
             console.error('Speed test failed:', error.message);
             
             isSpeedTestRunning = false;
             return errorResult;
         }
     }
-
-    // IPC handler for on-demand speed test
-    ipcMain.handle('run-speed-test', async () => {
-        return await runSpeedTest();
-    });
 
     // Change tray icon when bria connects
     ipcMain.on('status-changed', (event, status) => {
@@ -908,6 +838,14 @@ function createWindow() {
                 extra: systemInfo
             });
         }, 30000);
+
+        // Auto-start periodic network monitoring after page loads
+        const monitorDelayMs = 33000; // 33 seconds delay to avoid duplicate discovery
+        setTimeout(() => {
+            if (win && !win.isDestroyed() && !networkMonitorInterval) {
+                startPeriodicMonitor({ intervalMs: DEFAULT_MONITOR_INTERVAL_MS });
+            }
+        }, monitorDelayMs);
     });
 
     // Auto-start speed test
