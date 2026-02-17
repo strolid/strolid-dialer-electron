@@ -768,7 +768,8 @@ function createWindow() {
     })
 
     ipcMain.on('set-user', (event, user) => {
-        win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
+        const versionString = user.rendererVersion ? `Desktop v${appVersion} | Web v${user.rendererVersion}` : `v${appVersion}`;
+        win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer - ${versionString} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
         Sentry.setUser(user);
 
         startServer();
