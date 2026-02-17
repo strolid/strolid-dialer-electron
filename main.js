@@ -11,6 +11,8 @@ const contextMenu = require('electron-context-menu');
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
 
+let webAppVersion = '1.0.0';
+
 // Network monitoring configuration
 let networkMonitorInterval = null;
 let speedTestInterval = null;
@@ -768,13 +770,14 @@ function createWindow() {
     })
 
     ipcMain.on('set-user', (event, user) => {
+        webAppVersion = user.rendererVersion || '1.0.0';
         const versionString = user.rendererVersion ? `Desktop v${appVersion} | Web v${user.rendererVersion}` : `v${appVersion}`;
         win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer - ${versionString} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
         Sentry.setUser(user);
 
         startServer();
 
-        logToServer({ message: `User logged into dialer`, extra: { appVersion } });
+        logToServer({ message: `User logged into dialer`, extra: { appVersion, webAppVersion } });
     })
 
     // Log system information at startup
@@ -822,6 +825,7 @@ function createWindow() {
                 version: appVersion,
                 env: env
             },
+            webAppVersion: webAppVersion,
             systemUptime: Math.round(os.uptime() / 3600 * 100) / 100,  // hours
             timestamp: Date.now()
         };
