@@ -11,6 +11,8 @@ const contextMenu = require('electron-context-menu');
 const store = new Store();
 const env = process.env.ELECTRON_ENV || 'prod';
 
+let webAppVersion = '1.0.0';
+
 // Network monitoring configuration
 let networkMonitorInterval = null;
 let speedTestInterval = null;
@@ -20,13 +22,16 @@ const SPEED_TEST_INTERVAL_MS = 300000; // 5 minutes
 const MAX_ACCEPTABLE_PACKET_LOSS = 50; // Endpoints with >50% packet loss are considered "down"
 
 // Crexendo SIP WebSocket endpoints for latency testing
+// IMPORTANT: use2.crexendovip.com MUST be first — Crexendo assigned our account to this core.
+// Connecting to a different core causes "crossed cores" (recording quality issues, extra latency).
+// Other endpoints are kept as fallbacks only if use2 is unreachable.
 const CREXENDO_ENDPOINTS = [
-    { host: 'usw.crexendovip.com', port: 9002, region: 'US West', location: 'Phoenix' },
-    { host: 'usw2.crexendovip.com', port: 9002, region: 'US West 2', location: 'Phoenix' },
+    { host: 'use2.crexendovip.com', port: 9002, region: 'US East 2', location: 'Washington DC' },
+    { host: 'use.crexendovip.com', port: 9002, region: 'US East', location: 'Washington DC' },
     { host: 'usc.crexendovip.com', port: 9002, region: 'US Central', location: 'Chicago' },
     { host: 'usc2.crexendovip.com', port: 9002, region: 'US Central 2', location: 'Chicago' },
-    { host: 'use.crexendovip.com', port: 9002, region: 'US East', location: 'Washington DC' },
-    { host: 'use2.crexendovip.com', port: 9002, region: 'US East 2', location: 'Washington DC' },
+    { host: 'usw.crexendovip.com', port: 9002, region: 'US West', location: 'Phoenix' },
+    { host: 'usw2.crexendovip.com', port: 9002, region: 'US West 2', location: 'Phoenix' },
 ];
 
 // Best endpoint discovered at startup (cached for session)
@@ -768,12 +773,14 @@ function createWindow() {
     })
 
     ipcMain.on('set-user', (event, user) => {
-        win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer v${appVersion} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
+        webAppVersion = user.rendererVersion || '1.0.0';
+        const versionString = user.rendererVersion ? `Desktop v${appVersion} | Web v${user.rendererVersion}` : `v${appVersion}`;
+        win.setTitle(`${env !== 'prod' ? env + " - " : ""}Strolid Dialer - ${versionString} - ${user.name} (${user.extension}) ${switchedToEdge ? " (Edge)" : ""}`)
         Sentry.setUser(user);
 
         startServer();
 
-        logToServer({ message: `User logged into dialer`, extra: { appVersion } });
+        logToServer({ message: `User logged into dialer`, extra: { appVersion, webAppVersion } });
     })
 
     // Log system information at startup
@@ -821,6 +828,7 @@ function createWindow() {
                 version: appVersion,
                 env: env
             },
+            webAppVersion: webAppVersion,
             systemUptime: Math.round(os.uptime() / 3600 * 100) / 100,  // hours
             timestamp: Date.now()
         };
