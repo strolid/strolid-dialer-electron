@@ -17,6 +17,7 @@ let webAppVersion = '1.0.0';
 let networkMonitorInterval = null;
 let speedTestInterval = null;
 let isSpeedTestRunning = false; // Flag to prevent latency checks during speed test
+let lastCpuSnapshot = null;
 const DEFAULT_MONITOR_INTERVAL_MS = 30000; // 30 seconds
 const SPEED_TEST_INTERVAL_MS = 300000; // 5 minutes
 const MAX_ACCEPTABLE_PACKET_LOSS = 50; // Endpoints with >50% packet loss are considered "down"
@@ -464,16 +465,19 @@ function createWindow() {
     function getSystemResources() {
         const cpus = os.cpus();
         
-        // Calculate CPU usage (average across all cores)
-        let totalIdle = 0;
-        let totalTick = 0;
+        // Calculate CPU usage as a delta since the last call (real-time window, not boot-time average)
+        let idle = 0, total = 0;
         for (const cpu of cpus) {
-            for (const type in cpu.times) {
-                totalTick += cpu.times[type];
-            }
-            totalIdle += cpu.times.idle;
+            for (const type in cpu.times) total += cpu.times[type];
+            idle += cpu.times.idle;
         }
-        const cpuUsage = Math.round((1 - totalIdle / totalTick) * 100);
+        let cpuUsage = 0;
+        if (lastCpuSnapshot) {
+            const idleDiff = idle - lastCpuSnapshot.idle;
+            const totalDiff = total - lastCpuSnapshot.total;
+            cpuUsage = totalDiff > 0 ? Math.round((1 - idleDiff / totalDiff) * 100) : 0;
+        }
+        lastCpuSnapshot = { idle, total };
         
         // Memory usage
         const totalMem = os.totalmem();
