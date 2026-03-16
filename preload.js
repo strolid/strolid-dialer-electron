@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Network & Metrics
     getBestEndpoint: () => ipcRenderer.invoke('get-best-endpoint'),
     onMetrics: (callback) => ipcRenderer.on('metrics', (_event, value) => callback(value)),
+
+    setCallInProgress: (inProgress) => ipcRenderer.send('set-call-in-progress', inProgress),
 });

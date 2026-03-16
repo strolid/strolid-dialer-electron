@@ -50,6 +50,7 @@ if (env === 'prod') {
 let tray = null;
 let win = null;
 let appUrl = "";
+let isCallInProgress = false;
 
 contextMenu({
     showLearnSpelling: false,
@@ -268,26 +269,31 @@ function createWindow() {
     let isClosing = false;
     win.on('close', async function (e) {
         if (isClosing) return;
-        e.preventDefault()
+        e.preventDefault();
         const iconPath = path.join(__dirname, 'icons/exit_image.jpeg');
 
-        // Send a request to the sveltekit app to log that the user is closing the dialer
-        
+        if (isCallInProgress) {
+            dialog.showMessageBoxSync(win, {
+                type: 'warning',
+                buttons: ['OK'],
+                title: 'Cannot Close',
+                icon: iconPath,
+                message: 'You are currently on a call or playing a voicemail. Please end the call or wait for the voicemail to finish before closing the dialer.',
+            });
+            return;
+        }
+
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
+            defaultId: 1,
             title: 'Confirm',
             icon: iconPath,
-            message: 'Are you sure you want to close the dialer?'
+            message: 'Are you sure you want to close the dialer?',
         });
-        
-        if (response == 1) {
-            return;
-        }
+        if (response === 1) return;
         isClosing = true;
         win.webContents.send('change-status', 'unavailable');
-        // logToServer({ message: 'User closed the dialer app' });
-        // app.quit()
     });
 
     const iconPath = path.join(__dirname, 'icons/tray-icon-unavailable.png');
@@ -314,6 +320,9 @@ function createWindow() {
     // Maximize app when incoming call is detected
     ipcMain.on('open-app', () => {
         showWindow();
+    })
+    ipcMain.on('set-call-in-progress', (event, inProgress) => {
+        isCallInProgress = inProgress;
     })
     ipcMain.on('destroy-window-delayed', () => {
         setTimeout(() => { win.destroy() }, 10000)
