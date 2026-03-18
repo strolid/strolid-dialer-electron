@@ -429,7 +429,10 @@ function createWindow() {
             await runEndpointDiscovery();
         }
         
-        return bestEndpoint ? bestEndpoint.host : null;
+        // Fall back to the preferred endpoint if all pings failed, so the dialer
+        // can still attempt a connection (e.g. when a firewall blocks TCP pings
+        // but WebSocket traffic on port 9002 is allowed).
+        return bestEndpoint ? bestEndpoint.host : CREXENDO_ENDPOINTS[0].host;
     });
 
     // Helper function to detect connection type from interface name
