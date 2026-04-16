@@ -23,8 +23,19 @@ jobs:
 
       - name: Build and publish artifacts
         run: |
-          npx conveyor -f ci.conveyor.conf make site
-          npx conveyor -f ci.conveyor.conf make copied-site
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt of 3..."
+            if npx conveyor -f ci.conveyor.conf make site && npx conveyor -f ci.conveyor.conf make copied-site; then
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Build failed, retrying in 60 seconds..."
+              sleep 60
+            else
+              echo "All 3 attempts failed"
+              exit 1
+            fi
+          done
 
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
