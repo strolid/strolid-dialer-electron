@@ -9,6 +9,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,22 +26,9 @@ jobs:
         run: npm install
 
       - name: Build and publish artifacts
-        run: |
-          for attempt in 1 2 3; do
-            echo "Attempt $attempt of 3..."
-            if npx conveyor -f ci.conveyor.conf make site && npx conveyor -f ci.conveyor.conf make copied-site; then
-              break
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "Build failed, retrying in 60 seconds..."
-              sleep 60
-            else
-              echo "All 3 attempts failed"
-              exit 1
-            fi
-          done
-
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-      CONVEYOR_AGREE_TO_LICENSE: 1
+        uses: hydraulic-software/conveyor/actions/build@v22.0
+        with:
+          command: make site
+          signing_key: ${{ secrets.SIGNING_KEY }}
+          agree_to_license: 1
+          extra_flags: "-f ci.conveyor.conf"
