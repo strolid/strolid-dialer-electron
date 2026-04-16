@@ -1,7 +1,6 @@
 const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, MenuItem, globalShortcut } = require('electron')
 const path = require('path');
 const fs = require('fs');
-const dns = require('dns').promises;
 const os = require('os');
 const tcpPing = require('tcp-ping');
 const { startServer } = require('./httpServer');
