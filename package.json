@@ -9,7 +9,7 @@
   "author": "strolid",
   "license": "MIT",
   "devDependencies": {
-    "@hydraulic/conveyor": "^13.0.0",
+    "@hydraulic/conveyor": "^13.1.0",
     "electron": "^41.0.0"
   },
   "dependencies": {
