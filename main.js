@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const tcpPing = require('tcp-ping');
 const { startServer } = require('./httpServer');
+const { installWssCertBridge } = require('./wssCertBridge');
 const Store = require('electron-store');
 const contextMenu = require('electron-context-menu');
 
@@ -330,6 +331,12 @@ function createWindow() {
     ipcMain.on('ready-to-close', () => {
         logToServer({ message: 'User closed the dialer app' });
         app.quit()
+    })
+
+    ipcMain.on('restart-app', () => {
+        logToServer({ message: 'Dialer app restarting (suspend detected)' });
+        app.relaunch();
+        app.exit(0);
     })
 
     // ===== Network Monitoring =====
@@ -881,6 +888,14 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    // Force-v4 WSS cert bridge for the dialer's ICE probe. Installs a
+    // session-wide certificate verifier that accepts Crexendo's
+    // *.vipvoice.io infra certs when the renderer has registered the
+    // corresponding IPv4. See wssCertBridge.js for details. Must run
+    // before createWindow so the verifier is in place when the dialer
+    // page loads and the probe fires.
+    installWssCertBridge();
+
     globalShortcut.register('Control+Shift+H', () => {
         win.webContents.send('hangup-call-hotkey-pressed')
         logToServer({ message: 'Hangup call hotkey pressed'});
