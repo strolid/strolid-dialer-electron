@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, MenuItem, globalShortcut } = require('electron')
+const { app, BrowserWindow, Tray, nativeImage, ipcMain, shell, dialog, Menu, globalShortcut } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -164,16 +164,13 @@ function createWindow() {
 
     win.setTitle(`Strolid Dialer v${appVersion} - ${env}`)
 
-    appUrl = 'https://strolid-dialer.strolidcxm.com/dialer'
-    const edgeUrl = 'https://strolid-dialer-edge.strolidcxm.com/dialer';
+    // v1 is deprecated: always load the frozen v1-deprecated deployment,
+    // regardless of any previously persisted onEdgeVersion value.
+    appUrl = 'https://strolid-dialer-v1-deprecated-zw2v8.ondigitalocean.app/dialer'
     if (env == 'dev') {
         appUrl = 'http://localhost:3005/dialer'
     }
-    if (store.get('onEdgeVersion')) {
-        win.loadURL(edgeUrl)
-    } else {
-        win.loadURL(appUrl)
-    }
+    win.loadURL(appUrl)
 
     const appMenu = Menu.getApplicationMenu();
     const viewMenu = appMenu.items.find(item => item.label === 'View');
@@ -224,39 +221,6 @@ function createWindow() {
             }
         };
     }
-
-    let switchedToEdge = !!store.get('onEdgeVersion');
-    const switchToEdge = new MenuItem({
-        label: 'Switch to Edge',
-        // accelerator: 'CmdOrCtrl+E',
-        checked: switchedToEdge,
-        type: 'checkbox',
-        click: async () => {
-            const checked = switchToEdge.checked;
-            if (checked) {
-                // load https://google.com
-                console.log(`switching to ${edgeUrl}`)
-                const title = win.getTitle();
-                win.setTitle(`Redirecting to Edge...`)
-                await win.loadURL(edgeUrl);
-                win.setTitle(title + ' (Edge)');
-                switchedToEdge = true;
-                console.log(`switched to Edge successfully`)
-                store.set('onEdgeVersion', true);
-            } else {
-                console.log(`switching to ${appUrl}`)
-                const title = win.getTitle();
-                win.setTitle(`Redirecting to Production...`)
-                await win.loadURL(appUrl);
-                win.setTitle(title.replace(' (Edge)', ''));
-                switchedToEdge = false;
-                console.log(`switched to Prod/dev successfully`)
-                store.set('onEdgeVersion', false);
-            }
-        }
-    })
-
-    viewMenu.submenu.append(switchToEdge);
 
     Menu.setApplicationMenu(appMenu);
 
