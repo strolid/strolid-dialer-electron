@@ -166,7 +166,7 @@ function createWindow() {
 
     // v1 is deprecated: always load the frozen v1-deprecated deployment,
     // regardless of any previously persisted onEdgeVersion value.
-    appUrl = 'https://strolid-dialer-v1-deprecated-zw2v8.ondigitalocean.app/dialer'
+    appUrl = 'https://strolid-dialer-v1.strolidcxm.com/dialer'
     if (env == 'dev') {
         appUrl = 'http://localhost:3005/dialer'
     }
