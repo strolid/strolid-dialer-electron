@@ -692,6 +692,9 @@ function createWindow() {
                         }
                     });
                     
+                    // Socket outlives the request in the agent pool; an unhandled error there is fatal.
+                    req.on('socket', (socket) => socket.on('error', () => {}));
+
                     req.on('timeout', () => {
                         if (!hasError) {
                             hasError = true;
