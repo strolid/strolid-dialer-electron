@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onMetrics: (callback) => ipcRenderer.on('metrics', (_event, value) => callback(value)),
 
     setCallInProgress: (inProgress) => ipcRenderer.send('set-call-in-progress', inProgress),
+    // Escapable close-guard for pending call-data uploads (distinct from
+    // setCallInProgress's hard block). The renderer feature-detects this with
+    // optional chaining, so its absence on older shells is a safe no-op.
+    setUploadsPending: (pending) => ipcRenderer.send('set-uploads-pending', pending),
 
     // Force-v4 WSS bridge for the ICE probe. The renderer (wsEndpoint.ts)
     // reads wssCertBridgeVersion to confirm the cert verifier is installed,

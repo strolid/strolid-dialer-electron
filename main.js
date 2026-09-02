@@ -51,6 +51,11 @@ let tray = null;
 let win = null;
 let appUrl = "";
 let isCallInProgress = false;
+// Renderer-reported "call data is still uploading" flag (set-uploads-pending).
+// Drives an ESCAPABLE close confirm, never the isCallInProgress hard block: a
+// failing/retrying upload must not trap the agent in the app (the renderer's
+// crash-recovery re-uploads pending calls on the next launch anyway).
+let uploadsPending = false;
 
 contextMenu({
     showLearnSpelling: false,
@@ -247,6 +252,26 @@ function createWindow() {
             return;
         }
 
+        if (uploadsPending) {
+            // Escapable by design (unlike the call-in-progress block above):
+            // if the upload is stuck/retrying, the agent must still be able to
+            // leave — the dialer re-uploads pending call data on next launch.
+            // "Close Anyway" replaces the generic confirm below (one dialog,
+            // already an explicit close confirmation).
+            const uploadsResponse = dialog.showMessageBoxSync(win, {
+                type: 'warning',
+                buttons: ['Wait', 'Close Anyway'],
+                defaultId: 0,
+                title: 'Uploads in Progress',
+                icon: iconPath,
+                message: 'A recent call has not finished wrapping up — its call data may still be uploading. If you close now, the dialer will finish this the next time it opens.\n\nClose anyway?',
+            });
+            if (uploadsResponse === 0) return;
+            isClosing = true;
+            win.webContents.send('change-status', 'unavailable');
+            return;
+        }
+
         let response = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['Yes', 'No'],
@@ -284,6 +309,9 @@ function createWindow() {
     // Maximize app when incoming call is detected
     ipcMain.on('open-app', () => {
         showWindow();
+    })
+    ipcMain.on('set-uploads-pending', (event, pending) => {
+        uploadsPending = !!pending;
     })
     ipcMain.on('set-call-in-progress', (event, inProgress) => {
         isCallInProgress = inProgress;
