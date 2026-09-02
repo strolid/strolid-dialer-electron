@@ -56,6 +56,15 @@ let isCallInProgress = false;
 // failing/retrying upload must not trap the agent in the app (the renderer's
 // crash-recovery re-uploads pending calls on the next launch anyway).
 let uploadsPending = false;
+// Registered at module scope, not in createWindow: the renderer can send this
+// during boot (the startup orphan-recovery upload fires right after mount),
+// which is before createWindow's post-loadURL ipcMain registrations attach —
+// an early message must not be dropped. Guarded to the app window's
+// WebContents so no other view can toggle close behavior.
+ipcMain.on('set-uploads-pending', (event, pending) => {
+    if (!win || event.sender !== win.webContents) return;
+    uploadsPending = !!pending;
+})
 
 contextMenu({
     showLearnSpelling: false,
@@ -309,9 +318,6 @@ function createWindow() {
     // Maximize app when incoming call is detected
     ipcMain.on('open-app', () => {
         showWindow();
-    })
-    ipcMain.on('set-uploads-pending', (event, pending) => {
-        uploadsPending = !!pending;
     })
     ipcMain.on('set-call-in-progress', (event, inProgress) => {
         isCallInProgress = inProgress;
